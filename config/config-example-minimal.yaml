@@ -1,0 +1,27 @@
+# AWS Control Tower Automation - Minimal Example Configuration
+# This is the minimal configuration required for Control Tower deployment.
+# Copy this file to config.yaml and customize for your environment.
+
+# AWS Configuration - Required settings
+aws:
+  # Home Region - Where Control Tower will be deployed
+  home_region: "us-east-1"
+  
+  # Governed regions - Regions under Control Tower governance
+  governed_regions:
+    - "us-east-1"
+
+# Shared Accounts - Required for Control Tower
+accounts:
+  # Log Archive account
+  log_archive:
+    name: "Log Archive"
+    email: "aws-log-archive@yourcompany.com"
+  
+  # Audit account
+  audit:
+    name: "Audit"
+    email: "aws-audit@yourcompany.com"
+
+# SCP Tier - Security policy level
+scp_tier: "basic"

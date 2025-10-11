@@ -1,0 +1,218 @@
+{
+  "name": "Strict Security Tier",
+  "description": "Maximum security enforcement for compliance environments",
+  "policies": [
+    {
+      "name": "PreventRootAccess",
+      "description": "Prevent root user access to all operations",
+      "policy": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "PreventRootAccess",
+            "Effect": "Deny",
+            "Principal": {
+              "AWS": "*"
+            },
+            "Action": "*",
+            "Resource": "*",
+            "Condition": {
+              "StringEquals": {
+                "aws:PrincipalType": "Root"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PreventSecurityResourceDeletion",
+      "description": "Prevent deletion of all security resources",
+      "policy": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "PreventSecurityResourceDeletion",
+            "Effect": "Deny",
+            "Principal": {
+              "AWS": "*"
+            },
+            "Action": [
+              "iam:Delete*",
+              "iam:Detach*",
+              "iam:Remove*",
+              "cloudtrail:Delete*",
+              "cloudtrail:Stop*",
+              "config:Delete*",
+              "config:Stop*",
+              "guardduty:Delete*",
+              "securityhub:Disable*",
+              "macie2:Disable*",
+              "inspector2:Disable*"
+            ],
+            "Resource": "*"
+          }
+        ]
+      }
+    },
+    {
+      "name": "RequireMFAForAllOperations",
+      "description": "Require MFA for all sensitive operations",
+      "policy": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "RequireMFAForAllOperations",
+            "Effect": "Deny",
+            "Principal": {
+              "AWS": "*"
+            },
+            "Action": [
+              "iam:*",
+              "organizations:*",
+              "account:*",
+              "billing:*",
+              "aws-portal:*",
+              "support:*"
+            ],
+            "Resource": "*",
+            "Condition": {
+              "BoolIfExists": {
+                "aws:MultiFactorAuthPresent": "false"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "EnforceStrictEncryption",
+      "description": "Enforce strict encryption requirements",
+      "policy": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "DenyUnencryptedStorage",
+            "Effect": "Deny",
+            "Principal": {
+              "AWS": "*"
+            },
+            "Action": [
+              "s3:PutObject",
+              "s3:CreateBucket",
+              "ec2:CreateVolume",
+              "ec2:RunInstances",
+              "rds:CreateDBInstance",
+              "rds:CreateDBCluster",
+              "dynamodb:CreateTable"
+            ],
+            "Resource": "*",
+            "Condition": {
+              "Bool": {
+                "aws:SecureTransport": "false"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "RestrictServiceAccess",
+      "description": "Restrict access to non-essential services",
+      "policy": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "RestrictServiceAccess",
+            "Effect": "Deny",
+            "Principal": {
+              "AWS": "*"
+            },
+            "Action": [
+              "sagemaker:*",
+              "cloud9:*",
+              "lightsail:*",
+              "workspaces:*",
+              "chime:*",
+              "connect:*",
+              "gamelift:*",
+              "sumerian:*"
+            ],
+            "Resource": "*"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EnforceDataResidency",
+      "description": "Enforce data residency requirements",
+      "policy": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "EnforceDataResidency",
+            "Effect": "Deny",
+            "Principal": {
+              "AWS": "*"
+            },
+            "Action": "*",
+            "Resource": "*",
+            "Condition": {
+              "StringNotEquals": {
+                "aws:RequestedRegion": [
+                  "us-east-1",
+                  "us-west-2"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PreventPrivilegeEscalation",
+      "description": "Prevent all privilege escalation attacks",
+      "policy": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "PreventPrivilegeEscalation",
+            "Effect": "Deny",
+            "Principal": {
+              "AWS": "*"
+            },
+            "Action": [
+              "iam:CreatePolicyVersion",
+              "iam:SetDefaultPolicyVersion",
+              "iam:PassRole",
+              "sts:AssumeRole"
+            ],
+            "Resource": "*"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EnforceAuditLogging",
+      "description": "Enforce comprehensive audit logging",
+      "policy": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "EnforceAuditLogging",
+            "Effect": "Deny",
+            "Principal": {
+              "AWS": "*"
+            },
+            "Action": [
+              "logs:DeleteLogGroup",
+              "logs:DeleteLogStream",
+              "logs:PutRetentionPolicy"
+            ],
+            "Resource": "*"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,95 @@
+# AWS Control Tower Automation - Enterprise Example Configuration
+# This configuration is designed for large enterprise deployments with
+# strict security requirements and multi-region governance.
+
+# AWS Configuration - Enterprise multi-region setup
+aws:
+  # Home Region - Primary region for Control Tower
+  home_region: "us-east-1"
+  
+  # Governed regions - Full global coverage
+  governed_regions:
+    - "us-east-1"      # US East (N. Virginia)
+    - "us-west-2"      # US West (Oregon)
+    - "eu-west-1"      # Europe (Ireland)
+    - "eu-central-1"   # Europe (Frankfurt)
+    - "ap-southeast-1" # Asia Pacific (Singapore)
+    - "ap-northeast-1" # Asia Pacific (Tokyo)
+  
+  # Use specific AWS profile for enterprise credentials
+  profile_name: "enterprise-admin"
+  
+  # Enable region deny for data residency compliance
+  region_deny_enabled: true
+
+# Enterprise Organization Structure
+organization:
+  # Security OU for shared security accounts
+  security_ou_name: "Security"
+  
+  # Comprehensive OU structure for enterprise
+  additional_ous:
+    - name: "Production"
+      parent: "Root"
+    - name: "Staging"
+      parent: "Root"
+    - name: "Development"
+      parent: "Root"
+    - name: "Sandbox"
+      parent: "Root"
+    - name: "Security"
+      parent: "Root"
+    - name: "Shared Services"
+      parent: "Root"
+    - name: "Suspended"
+      parent: "Root"
+
+# Enterprise Shared Accounts
+accounts:
+  # Log Archive account with enterprise naming
+  log_archive:
+    name: "Enterprise-Log-Archive"
+    email: "aws-log-archive@enterprise.com"
+  
+  # Audit account with enterprise naming
+  audit:
+    name: "Enterprise-Security-Audit"
+    email: "aws-security-audit@enterprise.com"
+
+# Strict SCP tier for enterprise security
+scp_tier: "strict"
+
+# Enable Identity Center for enterprise SSO
+identity_center:
+  enabled: true
+
+# Comprehensive logging for enterprise compliance
+logging:
+  cloudtrail_enabled: true
+  config_enabled: true
+
+# Full security baseline for enterprise
+post_deployment:
+  # GuardDuty with enhanced monitoring
+  guardduty:
+    enabled: true
+    # More frequent findings for enterprise security
+    finding_publishing_frequency: "FIFTEEN_MINUTES"
+    delegated_admin_account: "audit"
+    # Enable all protection features
+    s3_protection: true
+    kubernetes_protection: true
+    malware_protection: true
+  
+  # Security Hub with full automation
+  security_hub:
+    enabled: true
+    delegated_admin_account: "audit"
+    auto_enable_new_accounts: true
+    enable_default_standards: true
+  
+  # Config with comprehensive monitoring
+  aws_config:
+    enabled: true
+    organization_aggregator: true
+    compliance_monitoring: true

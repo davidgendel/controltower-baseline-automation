@@ -1,0 +1,98 @@
+# AWS Control Tower Automation Configuration
+# This configuration file defines all settings for automated Control Tower
+# deployment with security baseline following AWS best practices.
+
+# AWS Configuration - Core settings for Control Tower deployment
+aws:
+  # Home Region - Cannot be changed after Control Tower setup
+  # This is where shared resources will be provisioned
+  home_region: "us-east-1"
+  
+  # Additional regions for governance (optional)
+  # Control Tower will govern these regions with guardrails
+  governed_regions:
+    - "us-east-1"
+    - "us-west-2"
+  
+  # AWS Profile name for credentials (optional)
+  # If not specified, uses default credential chain
+  profile_name: null
+  
+  # Region deny setting for data residency requirements
+  # Enables SCP to deny access to non-governed regions
+  region_deny_enabled: false
+
+# AWS Organizations Configuration
+organization:
+  # Foundational OU name (contains shared accounts)
+  security_ou_name: "Security"
+  
+  # Additional OUs to create
+  additional_ous:
+    - name: "Sandbox"
+      parent: "Root"
+
+# Shared Accounts Configuration
+# These accounts are created automatically by Control Tower
+accounts:
+  # Log Archive account configuration
+  log_archive:
+    name: "Log Archive"
+    email: "aws-log-archive@example.com"
+  
+  # Audit account configuration  
+  audit:
+    name: "Audit"
+    email: "aws-audit@example.com"
+
+# Service Control Policy (SCP) Tier Selection
+# Determines the level of guardrails applied
+# Options: basic (minimal), standard (balanced), strict (maximum)
+scp_tier: "standard"
+
+# AWS Identity Center Configuration
+identity_center:
+  # Enable AWS Identity Center (recommended)
+  enabled: true
+
+# Logging Configuration
+logging:
+  # Enable CloudTrail organization trail
+  cloudtrail_enabled: true
+  
+  # Enable AWS Config organization-wide
+  config_enabled: true
+
+# Post-Deployment Security Services Configuration
+post_deployment:
+  # Amazon GuardDuty Configuration
+  guardduty:
+    enabled: true
+    # Finding publishing frequency: FIFTEEN_MINUTES, ONE_HOUR, SIX_HOURS
+    finding_publishing_frequency: "SIX_HOURS"
+    # Delegated administrator account (audit or security)
+    delegated_admin_account: "audit"
+    # Enable S3 protection
+    s3_protection: true
+    # Enable Kubernetes protection
+    kubernetes_protection: true
+    # Enable Malware protection
+    malware_protection: true
+  
+  # AWS Security Hub Configuration
+  security_hub:
+    enabled: true
+    # Delegated administrator account (audit or security)
+    delegated_admin_account: "audit"
+    # Auto-enable for new accounts
+    auto_enable_new_accounts: true
+    # Enable foundational security standards
+    enable_default_standards: true
+  
+  # AWS Config Organization Configuration
+  aws_config:
+    enabled: true
+    # Enable organization aggregator
+    organization_aggregator: true
+    # Compliance monitoring
+    compliance_monitoring: true

@@ -1,0 +1,28 @@
+{
+  "governedRegions": [
+    "us-east-1"
+  ],
+  "organizationStructure": {
+    "security": {
+      "name": "Security"
+    }
+  },
+  "centralizedLogging": {
+    "accountId": "LOG_ARCHIVE_ACCOUNT_ID",
+    "configurations": {
+      "loggingBucket": {
+        "retentionDays": 365
+      },
+      "accessLoggingBucket": {
+        "retentionDays": 365
+      }
+    },
+    "enabled": true
+  },
+  "securityRoles": {
+    "accountId": "AUDIT_ACCOUNT_ID"
+  },
+  "accessManagement": {
+    "enabled": true
+  }
+}

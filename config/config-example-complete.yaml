@@ -1,0 +1,106 @@
+# AWS Control Tower Automation - Complete Example Configuration
+# This is a comprehensive example showing all available configuration options.
+# Copy this file to config.yaml and customize for your environment.
+
+# AWS Configuration - Core settings for Control Tower deployment
+aws:
+  # Home Region - Cannot be changed after Control Tower setup
+  # This is where Control Tower management resources will be deployed
+  home_region: "us-east-1"
+  
+  # Additional regions for governance
+  # Control Tower will extend governance to these regions
+  governed_regions:
+    - "us-east-1"
+    - "us-west-2"
+    - "eu-west-1"
+  
+  # AWS Profile name for credentials (optional)
+  # Leave null to use default credential chain
+  profile_name: null
+  
+  # Region deny setting for data residency requirements
+  # Enables SCP to deny access to non-governed regions
+  region_deny_enabled: true
+
+# AWS Organizations Configuration
+organization:
+  # Security OU name (contains shared security accounts)
+  security_ou_name: "Security"
+  
+  # Additional OUs to create during setup
+  additional_ous:
+    - name: "Production"
+      parent: "Root"
+    - name: "Development" 
+      parent: "Root"
+    - name: "Sandbox"
+      parent: "Root"
+    - name: "Suspended"
+      parent: "Root"
+
+# Shared Accounts Configuration
+# These accounts are created automatically by Control Tower
+accounts:
+  # Log Archive account - stores all organization logs
+  log_archive:
+    name: "Log Archive"
+    email: "aws-log-archive@yourcompany.com"
+  
+  # Audit account - security and compliance monitoring
+  audit:
+    name: "Audit" 
+    email: "aws-audit@yourcompany.com"
+
+# Service Control Policy (SCP) Tier Selection
+# Determines the level of guardrails applied organization-wide
+# Options: basic (minimal), standard (balanced), strict (maximum)
+scp_tier: "standard"
+
+# AWS Identity Center Configuration
+identity_center:
+  # Enable AWS Identity Center for centralized access management
+  enabled: true
+
+# Logging Configuration
+logging:
+  # Enable CloudTrail organization trail for audit logging
+  cloudtrail_enabled: true
+  
+  # Enable AWS Config organization-wide for compliance monitoring
+  config_enabled: true
+
+# Post-Deployment Security Services Configuration
+post_deployment:
+  # Amazon GuardDuty - Threat detection service
+  guardduty:
+    enabled: true
+    # Finding publishing frequency options:
+    # FIFTEEN_MINUTES, ONE_HOUR, SIX_HOURS
+    finding_publishing_frequency: "SIX_HOURS"
+    # Delegated administrator account (audit or security)
+    delegated_admin_account: "audit"
+    # Enable S3 protection for bucket monitoring
+    s3_protection: true
+    # Enable Kubernetes protection for EKS monitoring
+    kubernetes_protection: true
+    # Enable Malware protection for EC2 and container workloads
+    malware_protection: true
+  
+  # AWS Security Hub - Centralized security findings management
+  security_hub:
+    enabled: true
+    # Delegated administrator account (audit or security)
+    delegated_admin_account: "audit"
+    # Auto-enable Security Hub for new accounts
+    auto_enable_new_accounts: true
+    # Enable foundational security standards
+    enable_default_standards: true
+  
+  # AWS Config Organization Configuration
+  aws_config:
+    enabled: true
+    # Enable organization-wide configuration aggregator
+    organization_aggregator: true
+    # Enable compliance monitoring across organization
+    compliance_monitoring: true

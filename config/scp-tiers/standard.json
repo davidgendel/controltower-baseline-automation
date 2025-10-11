@@ -1,0 +1,200 @@
+{
+  "name": "Standard Security Tier",
+  "description": "Balanced security controls for production workloads",
+  "policies": [
+    {
+      "name": "PreventRootAccess",
+      "description": "Prevent root user access to sensitive operations",
+      "policy": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "PreventRootAccess",
+            "Effect": "Deny",
+            "Principal": {
+              "AWS": "*"
+            },
+            "Action": [
+              "organizations:LeaveOrganization",
+              "account:CloseAccount",
+              "billing:*",
+              "aws-portal:*"
+            ],
+            "Resource": "*",
+            "Condition": {
+              "StringEquals": {
+                "aws:PrincipalType": "Root"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "PreventSecurityResourceDeletion",
+      "description": "Prevent deletion of core security resources",
+      "policy": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "PreventSecurityResourceDeletion",
+            "Effect": "Deny",
+            "Principal": {
+              "AWS": "*"
+            },
+            "Action": [
+              "iam:DeleteRole",
+              "iam:DeletePolicy",
+              "cloudtrail:DeleteTrail",
+              "cloudtrail:StopLogging",
+              "config:DeleteConfigurationRecorder",
+              "config:DeleteDeliveryChannel",
+              "config:StopConfigurationRecorder",
+              "guardduty:DeleteDetector",
+              "securityhub:DisableSecurityHub"
+            ],
+            "Resource": [
+              "arn:aws:iam::*:role/AWSControlTower*",
+              "arn:aws:iam::*:role/aws-controltower-*",
+              "arn:aws:iam::*:policy/AWSControlTower*",
+              "arn:aws:cloudtrail:*:*:trail/aws-controltower-*",
+              "arn:aws:config:*:*:configuration-recorder/aws-controltower-*",
+              "arn:aws:config:*:*:delivery-channel/aws-controltower-*",
+              "*"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "RequireMFAForSensitiveOperations",
+      "description": "Require MFA for sensitive operations",
+      "policy": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "RequireMFAForSensitiveOperations",
+            "Effect": "Deny",
+            "Principal": {
+              "AWS": "*"
+            },
+            "Action": [
+              "iam:CreateUser",
+              "iam:DeleteUser",
+              "iam:CreateRole",
+              "iam:AttachUserPolicy",
+              "iam:AttachRolePolicy",
+              "iam:PutUserPolicy",
+              "iam:PutRolePolicy",
+              "iam:CreateAccessKey",
+              "iam:DeleteAccessKey"
+            ],
+            "Resource": "*",
+            "Condition": {
+              "BoolIfExists": {
+                "aws:MultiFactorAuthPresent": "false"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "EnforceEncryptionRequirements",
+      "description": "Enforce encryption for storage services",
+      "policy": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "DenyUnencryptedS3Objects",
+            "Effect": "Deny",
+            "Principal": {
+              "AWS": "*"
+            },
+            "Action": "s3:PutObject",
+            "Resource": "*",
+            "Condition": {
+              "StringNotEquals": {
+                "s3:x-amz-server-side-encryption": [
+                  "AES256",
+                  "aws:kms"
+                ]
+              }
+            }
+          },
+          {
+            "Sid": "DenyUnencryptedEBSVolumes",
+            "Effect": "Deny",
+            "Principal": {
+              "AWS": "*"
+            },
+            "Action": [
+              "ec2:CreateVolume",
+              "ec2:RunInstances"
+            ],
+            "Resource": "*",
+            "Condition": {
+              "Bool": {
+                "ec2:Encrypted": "false"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "RestrictHighRiskServices",
+      "description": "Restrict access to high-risk services",
+      "policy": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "RestrictHighRiskServices",
+            "Effect": "Deny",
+            "Principal": {
+              "AWS": "*"
+            },
+            "Action": [
+              "sagemaker:CreateNotebookInstance",
+              "sagemaker:CreatePresignedNotebookInstanceUrl",
+              "cloud9:CreateEnvironmentEC2",
+              "lightsail:*",
+              "workspaces:*"
+            ],
+            "Resource": "*"
+          }
+        ]
+      }
+    },
+    {
+      "name": "PreventPrivilegeEscalation",
+      "description": "Prevent privilege escalation attacks",
+      "policy": {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "PreventPrivilegeEscalation",
+            "Effect": "Deny",
+            "Principal": {
+              "AWS": "*"
+            },
+            "Action": [
+              "iam:CreatePolicyVersion",
+              "iam:SetDefaultPolicyVersion",
+              "iam:PassRole"
+            ],
+            "Resource": "*",
+            "Condition": {
+              "StringEquals": {
+                "iam:PassedToService": [
+                  "lambda.amazonaws.com",
+                  "ec2.amazonaws.com"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

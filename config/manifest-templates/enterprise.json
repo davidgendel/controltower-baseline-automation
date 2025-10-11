@@ -1,0 +1,51 @@
+{
+  "governedRegions": [
+    "us-east-1",
+    "us-west-2", 
+    "eu-west-1",
+    "eu-central-1",
+    "ap-southeast-1",
+    "ap-northeast-1"
+  ],
+  "organizationStructure": {
+    "security": {
+      "name": "Security"
+    },
+    "production": {
+      "name": "Production"
+    },
+    "staging": {
+      "name": "Staging"
+    },
+    "development": {
+      "name": "Development"
+    },
+    "sandbox": {
+      "name": "Sandbox"
+    },
+    "sharedServices": {
+      "name": "Shared Services"
+    },
+    "suspended": {
+      "name": "Suspended"
+    }
+  },
+  "centralizedLogging": {
+    "accountId": "LOG_ARCHIVE_ACCOUNT_ID",
+    "configurations": {
+      "loggingBucket": {
+        "retentionDays": 2555
+      },
+      "accessLoggingBucket": {
+        "retentionDays": 2555
+      }
+    },
+    "enabled": true
+  },
+  "securityRoles": {
+    "accountId": "AUDIT_ACCOUNT_ID"
+  },
+  "accessManagement": {
+    "enabled": true
+  }
+}
