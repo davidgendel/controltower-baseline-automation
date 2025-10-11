@@ -77,8 +77,8 @@ The management account must have the following permissions:
 
 1. **Clone the repository**:
    ```bash
-   git clone <repository-url>
-   cd aws-management-automation
+   git clone https://github.com/davidgendel/controltower-baseline-automation.git
+   cd controltower-baseline-automation
    ```
 
 2. **Install dependencies**:
