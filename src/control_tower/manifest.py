@@ -9,8 +9,8 @@ import json
 from typing import Dict, Any, List, Optional
 from botocore.exceptions import ClientError
 
-from ..core.aws_client import AWSClientManager
-from ..core.config import Configuration
+from src.core.aws_client import AWSClientManager
+from src.core.config import Configuration
 
 
 class ManifestValidationError(Exception):

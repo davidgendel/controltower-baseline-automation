@@ -9,7 +9,7 @@ import time
 from typing import Dict, List, Optional, Tuple, Any
 from botocore.exceptions import ClientError
 
-from ..core.aws_client import AWSClientManager
+from src.core.aws_client import AWSClientManager
 
 
 class AccountCreationError(Exception):

@@ -10,10 +10,14 @@ import argparse
 from pathlib import Path
 from typing import Optional
 
-from core.config import Configuration, ConfigurationError
-from core.aws_client import AWSClientManager
-from core.interactive import InteractiveMenu
-from core.validator import PrerequisitesValidator
+# Add project root to path for absolute imports
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
+
+from src.core.config import Configuration, ConfigurationError
+from src.core.aws_client import AWSClientManager
+from src.core.interactive import InteractiveMenu
+from src.core.validator import PrerequisitesValidator
 
 
 def parse_arguments() -> argparse.Namespace:

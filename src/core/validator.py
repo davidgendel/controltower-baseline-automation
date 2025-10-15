@@ -11,7 +11,7 @@ from enum import Enum
 from typing import Dict, List, Optional, Any
 from botocore.exceptions import ClientError, NoCredentialsError
 
-from .aws_client import AWSClientManager
+from src.core.aws_client import AWSClientManager
 
 
 class ValidationStatus(Enum):
@@ -141,13 +141,13 @@ class OrganizationsValidator(BaseValidator):
                 ):
                     return ValidationResult(
                         validator_name=self.name,
-                        status=ValidationStatus.FAILED,
-                        message="AWS Organizations is not enabled for this account",
+                        status=ValidationStatus.WARNING,
+                        message="AWS Organizations is not enabled - will be created during setup",
                         remediation_steps=[
-                            "Enable AWS Organizations:",
-                            "1. Go to AWS Organizations console",
-                            "2. Click 'Create organization'",
-                            "3. Choose 'Enable all features' (required for Control Tower)",
+                            "AWS Organizations will be created automatically during setup with:",
+                            "1. All features enabled (required for Control Tower)",
+                            "2. Current account as management account",
+                            "3. Service Control Policies enabled",
                         ],
                     )
                 raise
@@ -312,7 +312,7 @@ class OrganizationsStructureValidator(BaseValidator):
             ValidationResult indicating Organizations structure status
         """
         try:
-            from ..prerequisites.organizations import OrganizationsManager
+            from src.prerequisites.organizations import OrganizationsManager
             
             org_manager = OrganizationsManager(self.aws_client)
             validation_results = org_manager.validate_organization_structure()
@@ -387,8 +387,8 @@ class PrerequisitesValidator:
         """
         self.aws_client = aws_client
         # Import here to avoid circular imports
-        from ..prerequisites.validators.account_validator import AccountStructureValidator
-        from ..prerequisites.validators.iam_validator import IAMRolesValidator
+        from src.prerequisites.validators.account_validator import AccountStructureValidator
+        from src.prerequisites.validators.iam_validator import IAMRolesValidator
         
         self.validators = [
             CredentialsValidator(aws_client),

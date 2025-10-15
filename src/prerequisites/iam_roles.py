@@ -7,7 +7,7 @@ for Control Tower deployment.
 from typing import Dict, List, Optional, Any
 from botocore.exceptions import ClientError
 
-from ..core.aws_client import AWSClientManager
+from src.core.aws_client import AWSClientManager
 
 
 class IAMRoleError(Exception):

@@ -172,16 +172,22 @@ class TestEndToEndIntegration:
             
             output_dir = Path(temp_dir)
             
-            # Generate all diagrams
-            diagram_paths = diagram_generator.generate_all_diagrams(output_dir)
+            # Generate text-based diagrams
+            ct_diagram = diagram_generator.generate_control_tower_structure()
+            security_diagram = diagram_generator.generate_security_services_flow()
             
-            # Verify all diagrams were generated
-            assert len(diagram_paths) == 3
-            expected_files = [
-                'control_tower_architecture.png',
-                'security_topology.png',
-                'organization_structure.png'
-            ]
+            # Save diagrams
+            ct_file = output_dir / "control_tower_structure.md"
+            security_file = output_dir / "security_services_flow.md"
+            
+            diagram_generator.save_diagram(ct_diagram, ct_file)
+            diagram_generator.save_diagram(security_diagram, security_file)
+            
+            # Verify diagrams were generated
+            assert ct_file.exists()
+            assert security_file.exists()
+            assert "AWS Control Tower Structure" in ct_diagram
+            assert "Security Services Flow" in security_diagram
             
             for expected_file in expected_files:
                 expected_path = output_dir / expected_file

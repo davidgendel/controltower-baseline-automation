@@ -27,6 +27,7 @@ class TestDeploymentOrchestrator:
         config.organization.additional_ous = []
         config.scp_tier = 'standard'
         config.landing_zone_version = '3.3'
+        config.get_scp_tier.return_value = 'standard'  # Fix mock method return
         return config
     
     @pytest.fixture
@@ -73,7 +74,9 @@ class TestDeploymentOrchestrator:
             'manifest_generated': False,
             'control_tower_deployed': False,
             'scp_policies_deployed': False,
-            'deployment_validated': False
+            'deployment_validated': False,
+            'audit_account_id': None,
+            'landing_zone_arn': None
         }
         assert orchestrator.deployment_state == expected_state
     

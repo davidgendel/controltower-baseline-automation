@@ -1,7 +1,7 @@
 """AWS Control Tower SCP policy management.
 
 This module provides the SCPPolicyManager class for managing Service Control
-Policies (SCPs) with three security tiers: Basic, Standard, and Strict.
+Policies (SCPs) with flexible security configuration support.
 """
 
 import json
@@ -9,7 +9,8 @@ import os
 from typing import Dict, Any, List, Optional
 from botocore.exceptions import ClientError
 
-from ..core.aws_client import AWSClientManager
+from src.core.aws_client import AWSClientManager
+from src.core.security_config import SecurityConfig
 
 
 class SCPPolicyError(Exception):
@@ -20,24 +21,22 @@ class SCPPolicyError(Exception):
 class SCPPolicyManager:
     """Manages AWS Organizations Service Control Policies.
     
-    This class handles SCP policy deployment and attachment with three
-    predefined security tiers: Basic, Standard, and Strict.
+    This class handles SCP policy deployment and attachment with flexible
+    security configuration support, decoupled from deployment templates.
     """
     
     # SCP tier definitions
-    SCP_TIERS = {
-        'basic': 'Basic Security Tier - Minimal restrictions for development',
-        'standard': 'Standard Security Tier - Balanced security for production',
-        'strict': 'Strict Security Tier - Maximum security for compliance'
-    }
+    SCP_TIERS = ['basic', 'standard', 'strict']
     
-    def __init__(self, aws_client_manager: AWSClientManager) -> None:
+    def __init__(self, aws_client_manager: AWSClientManager, security_config: Optional[SecurityConfig] = None) -> None:
         """Initialize the SCP policy manager.
         
         Args:
             aws_client_manager: AWS client manager instance
+            security_config: Security configuration instance (optional)
         """
         self.aws_client_manager = aws_client_manager
+        self.security_config = security_config or SecurityConfig()
         self._organizations_client = None
     
     @property
@@ -51,7 +50,7 @@ class SCPPolicyManager:
         """Deploy SCP tier policies to specified OUs.
         
         Args:
-            tier: SCP tier name (basic, standard, strict)
+            tier: Security tier name (basic, standard, strict) 
             target_ou_ids: List of OU IDs to attach policies to
             
         Returns:
@@ -60,10 +59,14 @@ class SCPPolicyManager:
         Raises:
             SCPPolicyError: When deployment fails
         """
-        if tier not in self.SCP_TIERS:
-            raise SCPPolicyError(f"Invalid SCP tier: {tier}. Valid tiers: {list(self.SCP_TIERS.keys())}")
-        
         try:
+            # Validate tier
+            if tier not in self.security_config.SECURITY_TIERS:
+                raise SCPPolicyError(f"Invalid SCP tier: {tier}")
+            
+            # Get policies for this tier
+            policy_names = self.security_config.get_tier_policies(tier)
+            
             # Load tier configuration
             tier_config = self._load_tier_config(tier)
             

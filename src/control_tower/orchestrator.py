@@ -6,12 +6,13 @@ validation, manifest generation, deployment, and SCP policy management.
 """
 
 from typing import Dict, Any, List, Optional
-from ..core.aws_client import AWSClientManager
-from ..core.config import Configuration
-from ..core.validator import PrerequisitesValidator
-from .deployer import ControlTowerDeployer, DeploymentError
-from .manifest import ManifestGenerator, ManifestValidationError
-from .scp_policies import SCPPolicyManager, SCPPolicyError
+from src.core.aws_client import AWSClientManager
+from src.core.config import Configuration
+from src.core.security_config import SecurityConfig, migrate_legacy_config
+from src.core.validator import PrerequisitesValidator
+from src.control_tower.deployer import ControlTowerDeployer, DeploymentError
+from src.control_tower.manifest import ManifestGenerator, ManifestValidationError
+from src.control_tower.scp_policies import SCPPolicyManager, SCPPolicyError
 
 
 class DeploymentOrchestrationError(Exception):
@@ -37,11 +38,14 @@ class DeploymentOrchestrator:
         self.config = config
         self.aws_client_manager = aws_client_manager
         
+        # Initialize security configuration (with legacy migration)
+        self.security_config = migrate_legacy_config(config)
+        
         # Initialize component managers
         self.prerequisites_validator = PrerequisitesValidator(aws_client_manager)
         self.manifest_generator = ManifestGenerator(config, aws_client_manager)
         self.control_tower_deployer = ControlTowerDeployer(aws_client_manager)
-        self.scp_policy_manager = SCPPolicyManager(aws_client_manager)
+        self.scp_policy_manager = SCPPolicyManager(aws_client_manager, self.security_config)
         
         # Deployment state tracking
         self.deployment_state = {
@@ -49,7 +53,9 @@ class DeploymentOrchestrator:
             'manifest_generated': False,
             'control_tower_deployed': False,
             'scp_policies_deployed': False,
-            'deployment_validated': False
+            'deployment_validated': False,
+            'audit_account_id': None,
+            'landing_zone_arn': None
         }
     
     def orchestrate_deployment(self, skip_prerequisites: bool = False,
@@ -107,9 +113,18 @@ class DeploymentOrchestrator:
                 deployment_results['steps_completed'].append('scp_policy_deployment')
                 print("✅ SCP policy deployment completed")
             
-            # Step 5: Post-deployment validation
+            # Step 5: Post-deployment validation and audit account extraction
             print("\n✅ Step 5: Performing post-deployment validation...")
             self._validate_deployment(landing_zone_arn)
+            
+            # Extract audit account ID for future use
+            audit_account_id = self.control_tower_deployer.get_audit_account_id_from_landing_zone(landing_zone_arn)
+            if audit_account_id:
+                self.deployment_state['audit_account_id'] = audit_account_id
+                print(f"✅ Audit account ID captured: {audit_account_id}")
+            else:
+                print("⚠️ Could not extract audit account ID from landing zone")
+            
             deployment_results['steps_completed'].append('post_deployment_validation')
             print("✅ Post-deployment validation completed")
             
@@ -306,6 +321,22 @@ class DeploymentOrchestrator:
         print("\n4. Review CloudTrail logs for detailed error information")
         print("5. Ensure all prerequisites are met before retrying deployment")
         print("6. Contact AWS Support if issues persist")
+    
+    def get_audit_account_id(self) -> Optional[str]:
+        """Get stored audit account ID from deployment state.
+        
+        Returns:
+            Audit account ID if available, None otherwise
+        """
+        return self.deployment_state.get('audit_account_id')
+    
+    def get_stored_landing_zone_arn(self) -> Optional[str]:
+        """Get stored landing zone ARN from deployment state.
+        
+        Returns:
+            Landing zone ARN if available, None otherwise
+        """
+        return self.deployment_state.get('landing_zone_arn')
         
         print("\n⚠️  Important: Do not manually delete Control Tower resources")
         print("   Always use the official Control Tower APIs for cleanup")

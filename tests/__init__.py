@@ -1,1 +1,1 @@
-"""Test suite for AWS Control Tower Automation."""
+# Test package for AWS Control Tower Automation

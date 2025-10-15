@@ -10,7 +10,7 @@ import time
 from typing import Dict, Any, Optional
 from botocore.exceptions import ClientError
 
-from ..core.aws_client import AWSClientManager
+from src.core.aws_client import AWSClientManager
 
 
 class ControlTowerError(Exception):
@@ -46,6 +46,15 @@ class ControlTowerDeployer:
             aws_client_manager: AWS client manager instance
         """
         self.aws_client_manager = aws_client_manager
+        self._control_tower_client = None
+        
+    def _get_client(self):
+        """Get Control Tower client.
+        
+        Returns:
+            Control Tower boto3 client
+        """
+        return self.aws_client_manager.get_client('controltower')
         self._control_tower_client = None
     
     @property
@@ -279,3 +288,85 @@ class ControlTowerDeployer:
             raise ControlTowerError(
                 "centralizedLogging and securityRoles must use different account IDs"
             )
+    
+    def extract_audit_account_from_manifest(self, manifest: Dict[str, Any]) -> Optional[str]:
+        """Extract audit account ID from landing zone manifest.
+        
+        Args:
+            manifest: Landing zone manifest dictionary
+            
+        Returns:
+            Audit account ID if found, None otherwise
+        """
+        try:
+            # Audit account is stored in securityRoles section
+            security_roles = manifest.get('securityRoles', {})
+            audit_account_id = security_roles.get('accountId')
+            
+            if audit_account_id and len(audit_account_id) == 12 and audit_account_id.isdigit():
+                return audit_account_id
+            
+            return None
+            
+        except Exception:
+            return None
+    
+    def get_landing_zone_details(self, landing_zone_arn: str) -> Dict[str, Any]:
+        """Get landing zone details using Control Tower API.
+        
+        Args:
+            landing_zone_arn: Landing zone ARN
+            
+        Returns:
+            Landing zone details dictionary
+            
+        Raises:
+            ControlTowerError: When API call fails
+        """
+        try:
+            client = self._get_client()
+            
+            # Extract landing zone identifier from ARN
+            landing_zone_id = landing_zone_arn.split('/')[-1]
+            
+            response = client.get_landing_zone(landingZoneIdentifier=landing_zone_id)
+            landing_zone = response['landingZone']
+            
+            # Transform response to match test expectations
+            return {
+                'arn': landing_zone['arn'],
+                'status': landing_zone['status'],
+                'latest_available_version': landing_zone['latestAvailableVersion'],
+                'version': landing_zone['version'],
+                'manifest': landing_zone['manifest'],
+                'drift_status': landing_zone['driftStatus']
+            }
+            
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            if error_code == 'ResourceNotFoundException':
+                raise ControlTowerError(f"Failed to get landing zone details: Landing zone not found")
+            elif error_code == 'AccessDeniedException':
+                raise ControlTowerError("Failed to get landing zone details: Insufficient permissions")
+            else:
+                raise ControlTowerError(f"Failed to get landing zone details: {e}")
+        except Exception as e:
+            raise ControlTowerError(f"Unexpected error getting landing zone details: {e}")
+    
+    def get_audit_account_id_from_landing_zone(self, landing_zone_arn: str) -> Optional[str]:
+        """Get audit account ID from deployed landing zone.
+        
+        Args:
+            landing_zone_arn: Landing zone ARN
+            
+        Returns:
+            Audit account ID if found, None otherwise
+        """
+        try:
+            landing_zone_details = self.get_landing_zone_details(landing_zone_arn)
+            manifest = landing_zone_details.get('manifest', {})
+            
+            return self.extract_audit_account_from_manifest(manifest)
+            
+        except ControlTowerError:
+            return None

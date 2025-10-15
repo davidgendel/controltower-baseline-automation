@@ -6,9 +6,9 @@ automatically during Control Tower setup.
 """
 
 from typing import List
-from ...core.aws_client import AWSClientManager
-from ...core.validator import BaseValidator, ValidationResult, ValidationStatus
-from ..iam_roles import IAMRolesManager
+from src.core.aws_client import AWSClientManager
+from src.core.validator import BaseValidator, ValidationResult, ValidationStatus
+from src.prerequisites.iam_roles import IAMRolesManager
 
 
 class IAMRolesValidator(BaseValidator):

@@ -8,8 +8,8 @@ from typing import Dict, List, Optional, Any
 import logging
 from botocore.exceptions import ClientError
 
-from ..core.aws_client import AWSClientManager
-from ..core.config import Configuration
+from src.core.aws_client import AWSClientManager
+from src.core.config import Configuration
 
 
 logger = logging.getLogger(__name__)

@@ -1,14 +1,15 @@
 """AWS Organizations management for Control Tower prerequisites.
 
-This module handles AWS Organizations setup including enabling all features,
-creating organizational units, and validating organization structure for
-Control Tower deployment.
+This module handles AWS Organizations setup including creating organizations,
+enabling all features, creating organizational units, and validating 
+organization structure for Control Tower deployment.
 """
 
+import time
 from typing import Dict, List, Optional, Any
 from botocore.exceptions import ClientError
 
-from ..core.aws_client import AWSClientManager
+from src.core.aws_client import AWSClientManager
 
 
 class OrganizationsError(Exception):
@@ -50,6 +51,187 @@ class OrganizationsManager:
             )
         return self._org_client
         
+    def create_organization(self) -> Dict[str, Any]:
+        """Create AWS Organization with all features enabled.
+        
+        Returns:
+            Dictionary containing created organization details
+            
+        Raises:
+            OrganizationsError: When creation fails
+        """
+        try:
+            client = self._get_client()
+            
+            # Create organization with all features enabled
+            response = client.create_organization(FeatureSet='ALL')
+            organization = response['Organization']
+            
+            print(f"  ✅ Organization created with ID: {organization['Id']}")
+            print(f"  ✅ Management Account: {organization['MasterAccountId']}")
+            
+            return organization
+            
+        except ClientError as e:
+            error_code = e.response['Error']['Code']
+            if error_code == 'AlreadyInOrganizationException':
+                # Organization already exists, get details
+                return self.get_organization_info()
+            elif error_code == 'AccessDeniedForDependencyException':
+                raise OrganizationsError(
+                    "Missing required permission: iam:CreateServiceLinkedRole for organizations.amazonaws.com"
+                )
+            elif error_code == 'ConstraintViolationException':
+                error_message = e.response['Error']['Message']
+                if 'ACCOUNT_CREATION_NOT_COMPLETE' in error_message:
+                    raise OrganizationsError(
+                        "Account setup is not complete. Please complete account setup before creating an organization."
+                    )
+                else:
+                    raise OrganizationsError(f"Organization creation constraint violation: {error_message}")
+            else:
+                raise OrganizationsError(f"Failed to create organization: {e}")
+    
+    def wait_for_organization_ready(self, max_wait_seconds: int = 300) -> bool:
+        """Wait for organization to be fully ready after creation.
+        
+        Args:
+            max_wait_seconds: Maximum time to wait in seconds
+            
+        Returns:
+            True if organization is ready, False if timeout
+        """
+        print("  ⏳ Waiting for organization to be fully ready...")
+        
+        # Initial wait of 60 seconds as requested
+        print("  ⏳ Initial wait: 60 seconds...")
+        time.sleep(60)
+        
+        start_time = time.time()
+        check_interval = 30  # Check every 30 seconds after initial wait
+        
+        while (time.time() - start_time) < max_wait_seconds:
+            try:
+                # Check if we can successfully describe the organization
+                org_info = self.get_organization_info()
+                
+                # Verify organization is in a stable state
+                if org_info.get('FeatureSet') == 'ALL':
+                    print("  ✅ Organization is ready")
+                    return True
+                    
+            except OrganizationsError:
+                # Organization not ready yet, continue waiting
+                pass
+            
+            print(f"  ⏳ Checking again in {check_interval} seconds...")
+            time.sleep(check_interval)
+        
+        print("  ⚠️ Timeout waiting for organization to be ready")
+        return False
+    
+    def organization_exists(self) -> bool:
+        """Check if AWS Organization exists.
+        
+        Returns:
+            True if organization exists, False otherwise
+        """
+        try:
+            self.get_organization_info()
+            return True
+        except OrganizationsError:
+            return False
+    
+    def find_account_by_email(self, email: str) -> Optional[str]:
+        """Find account ID by email address.
+        
+        Args:
+            email: Account email address to search for
+            
+        Returns:
+            Account ID if found, None otherwise
+        """
+        try:
+            client = self._get_client()
+            
+            # List all accounts in the organization
+            paginator = client.get_paginator('list_accounts')
+            
+            for page in paginator.paginate():
+                for account in page['Accounts']:
+                    if account.get('Email', '').lower() == email.lower():
+                        return account['Id']
+            
+            return None
+            
+        except ClientError:
+            return None
+    
+    def find_account_by_name(self, name: str) -> Optional[str]:
+        """Find account ID by account name.
+        
+        Args:
+            name: Account name to search for
+            
+        Returns:
+            Account ID if found, None otherwise
+        """
+        try:
+            client = self._get_client()
+            
+            # List all accounts in the organization
+            paginator = client.get_paginator('list_accounts')
+            
+            for page in paginator.paginate():
+                for account in page['Accounts']:
+                    if account.get('Name', '').lower() == name.lower():
+                        return account['Id']
+            
+            return None
+            
+        except ClientError:
+            return None
+    
+    def validate_account_in_security_ou(self, account_id: str) -> bool:
+        """Validate that account is in Security OU.
+        
+        Args:
+            account_id: Account ID to validate
+            
+        Returns:
+            True if account is in Security OU, False otherwise
+        """
+        try:
+            client = self._get_client()
+            
+            # Get root ID
+            root_id = self.get_root_id()
+            
+            # List OUs under root
+            ous = self.list_organizational_units(root_id)
+            
+            # Find Security OU
+            security_ou_id = None
+            for ou in ous:
+                if ou['Name'].lower() == 'security':
+                    security_ou_id = ou['Id']
+                    break
+            
+            if not security_ou_id:
+                return False
+            
+            # List accounts in Security OU
+            response = client.list_accounts_for_parent(ParentId=security_ou_id)
+            
+            for account in response['Accounts']:
+                if account['Id'] == account_id:
+                    return True
+            
+            return False
+            
+        except ClientError:
+            return False
+    
     def enable_all_features(self) -> bool:
         """Enable all features in AWS Organizations.
         

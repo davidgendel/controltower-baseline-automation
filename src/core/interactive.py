@@ -4,13 +4,13 @@ This module provides a clean, intuitive menu interface for all major
 functions with input validation and consistent user experience.
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import sys
 
-from .config import Configuration
-from .aws_client import AWSClientManager
-from .validator import PrerequisitesValidator
-from .safety import SafetyManager
+from src.core.config import Configuration
+from src.core.aws_client import AWSClientManager
+from src.core.validator import PrerequisitesValidator
+from src.core.safety import SafetyManager
 
 
 class InteractiveMenu:
@@ -50,9 +50,10 @@ class InteractiveMenu:
         print("2. Setup Prerequisites")
         print("3. Deploy Control Tower")
         print("4. Post-Deployment Security Setup")
-        print("5. Check Status")
-        print("6. Generate Documentation")
-        print("7. Configuration Management")
+        print("5. Security Configuration Management")
+        print("6. Check Status")
+        print("7. Generate Documentation")
+        print("8. Configuration Management")
         print("0. Exit")
         print("-" * 60)
 
@@ -87,9 +88,10 @@ class InteractiveMenu:
             "2": self._setup_prerequisites,
             "3": self._deploy_control_tower,
             "4": self._post_deployment_setup,
-            "5": self._check_status,
-            "6": self._generate_documentation,
-            "7": self._configuration_management,
+            "5": self._security_configuration_management,
+            "6": self._check_status,
+            "7": self._generate_documentation,
+            "8": self._configuration_management,
         }
 
         handler = handlers.get(choice)
@@ -189,8 +191,8 @@ class InteractiveMenu:
         
     def _run_prerequisites_setup(self, failed_validators: list) -> None:
         """Run prerequisites setup for failed validators."""
-        from ..prerequisites.organizations import OrganizationsManager
-        from ..prerequisites.accounts import AccountManager
+        from src.prerequisites.organizations import OrganizationsManager
+        from src.prerequisites.accounts import AccountManager
         
         print("\n🚀 Starting prerequisites setup...")
         
@@ -215,25 +217,79 @@ class InteractiveMenu:
         print("💡 Run 'Validate Prerequisites' to verify the setup.")
         
     def _setup_organizations(self) -> None:
-        """Setup AWS Organizations."""
-        from ..prerequisites.organizations import OrganizationsManager
+        """Setup AWS Organizations with comprehensive safety checks."""
+        from src.prerequisites.organizations import OrganizationsManager
         
-        print("  🔧 Enabling AWS Organizations all features...")
         org_manager = OrganizationsManager(self.aws_client)
         
-        # Enable all features
-        org_manager.enable_all_features()
-        print("  ✅ Organizations all features enabled")
+        # Check if organization already exists
+        if org_manager.organization_exists():
+            print("  ℹ️ AWS Organization already exists")
+            print("  🔧 Checking if all features are enabled...")
+            org_manager.enable_all_features()
+            print("  ✅ Organizations all features enabled")
+            return
+        
+        # Organization doesn't exist - need to create it
+        print("  ⚠️ AWS Organization does not exist")
+        print("  📋 Creating an AWS Organization will:")
+        print("     • Make this account the permanent management account")
+        print("     • Enable all AWS Organizations features")
+        print("     • Allow centralized management of multiple AWS accounts")
+        print("     • Enable Service Control Policies (SCPs)")
+        print("     • This action CANNOT be undone")
+        print()
+        
+        # First confirmation
+        print("  🚨 CRITICAL: This is a permanent, irreversible change to your AWS account")
+        first_confirm = input("  Type 'CREATE' to acknowledge this is permanent: ").strip()
+        
+        if first_confirm != 'CREATE':
+            print("  ❌ Organization creation cancelled")
+            return
+        
+        # Second confirmation with account details
+        account_id = self.aws_client.get_account_id()
+        print(f"\n  📋 Confirmation Details:")
+        print(f"     • Account ID: {account_id}")
+        print(f"     • This account will become the management account")
+        print(f"     • You will be able to create and manage member accounts")
+        print(f"     • Service Control Policies will be enabled")
+        print()
+        
+        second_confirm = input("  Type 'yes' to proceed with organization creation: ").strip().lower()
+        
+        if second_confirm != 'yes':
+            print("  ❌ Organization creation cancelled")
+            return
+        
+        try:
+            print("  🔧 Creating AWS Organization (this may take several minutes)...")
+            organization = org_manager.create_organization()
+            
+            # Wait for organization to be ready
+            if org_manager.wait_for_organization_ready():
+                print("  ✅ AWS Organization created successfully")
+                print(f"  ✅ Organization ID: {organization['Id']}")
+                print(f"  ✅ Management Account: {organization['MasterAccountId']}")
+            else:
+                print("  ⚠️ Organization created but may still be initializing")
+                print("  💡 You can continue with setup - organization will be ready shortly")
+                
+        except Exception as e:
+            print(f"  ❌ Failed to create organization: {e}")
+            print("  💡 Please check AWS console or try again later")
+            raise
         
     def _setup_organization_structure(self) -> None:
         """Setup organization structure with required OUs."""
-        from ..prerequisites.organizations import OrganizationsManager
+        from src.prerequisites.organizations import OrganizationsManager
         
         print("  🔧 Creating organizational units...")
         org_manager = OrganizationsManager(self.aws_client)
         
         # Get root ID
-        root_id = org_manager._get_root_id()
+        root_id = org_manager.get_root_id()
         
         # Create Security OU
         try:
@@ -276,7 +332,7 @@ class InteractiveMenu:
         print("=" * 60)
         
         # Import deployment orchestrator
-        from ..control_tower.orchestrator import DeploymentOrchestrator, DeploymentOrchestrationError
+        from src.control_tower.orchestrator import DeploymentOrchestrator, DeploymentOrchestrationError
         
         # First validate prerequisites
         print("🔍 Validating prerequisites before deployment...")
@@ -368,7 +424,7 @@ class InteractiveMenu:
         print()
         
         # Import here to avoid circular imports
-        from ..post_deployment.orchestrator import PostDeploymentOrchestrator
+        from src.post_deployment.orchestrator import PostDeploymentOrchestrator
         
         # Get audit account ID
         audit_account_id = self._get_audit_account_id()
@@ -397,7 +453,89 @@ class InteractiveMenu:
         
         input("\nPress Enter to continue...")
     
-    def _get_audit_account_id(self) -> str:
+    def _get_audit_account_id(self) -> Optional[str]:
+        """Get audit account ID with automated detection and fallbacks.
+        
+        Returns:
+            Audit account ID if found, None if user cancels
+        """
+        print("📋 Audit Account Detection")
+        print("Attempting to automatically detect audit account...")
+        
+        # Method 1: Try to get from deployment state
+        try:
+            from src.control_tower.orchestrator import DeploymentOrchestrator
+            orchestrator = DeploymentOrchestrator(self.config, self.aws_client)
+            audit_account_id = orchestrator.get_audit_account_id()
+            
+            if audit_account_id:
+                print(f"✅ Found audit account from deployment: {audit_account_id}")
+                confirm = input("Use this audit account? (y/n): ").strip().lower()
+                if confirm in ['y', 'yes']:
+                    return audit_account_id
+        except Exception:
+            pass
+        
+        # Method 2: Try to find by configuration
+        try:
+            from src.prerequisites.organizations import OrganizationsManager
+            org_manager = OrganizationsManager(self.aws_client)
+            
+            # Try to find by email from config
+            audit_email = self.config.get('accounts.audit.email')
+            if audit_email:
+                audit_account_id = org_manager.find_account_by_email(audit_email)
+                if audit_account_id:
+                    # Validate it's in Security OU
+                    if org_manager.validate_account_in_security_ou(audit_account_id):
+                        print(f"✅ Found audit account by email: {audit_account_id}")
+                        confirm = input("Use this audit account? (y/n): ").strip().lower()
+                        if confirm in ['y', 'yes']:
+                            return audit_account_id
+            
+            # Try to find by name from config
+            audit_name = self.config.get('accounts.audit.name')
+            if audit_name:
+                audit_account_id = org_manager.find_account_by_name(audit_name)
+                if audit_account_id:
+                    # Validate it's in Security OU
+                    if org_manager.validate_account_in_security_ou(audit_account_id):
+                        print(f"✅ Found audit account by name: {audit_account_id}")
+                        confirm = input("Use this audit account? (y/n): ").strip().lower()
+                        if confirm in ['y', 'yes']:
+                            return audit_account_id
+        except Exception:
+            pass
+        
+        # Method 3: Manual input as last resort
+        print("⚠️ Could not automatically detect audit account")
+        print("The audit account will be designated as delegated administrator")
+        print("for all security services (Config, GuardDuty, Security Hub).")
+        print()
+        
+        while True:
+            account_id = input("Enter Audit Account ID (12 digits, or 'cancel' to abort): ").strip()
+            
+            if account_id.lower() == 'cancel':
+                return None
+            
+            if len(account_id) == 12 and account_id.isdigit():
+                # Validate account exists and is accessible
+                try:
+                    from src.prerequisites.organizations import OrganizationsManager
+                    org_manager = OrganizationsManager(self.aws_client)
+                    
+                    if org_manager.validate_account_in_security_ou(account_id):
+                        print(f"✅ Audit Account ID: {account_id}")
+                        confirm = input("Is this correct? (y/n): ").strip().lower()
+                        if confirm in ['y', 'yes']:
+                            return account_id
+                    else:
+                        print("⚠️ Account not found in Security OU. Please verify the account ID.")
+                except Exception:
+                    print("⚠️ Could not validate account. Please verify the account ID.")
+            else:
+                print("❌ Invalid account ID. Must be exactly 12 digits.")
         """Get audit account ID for delegated administration."""
         print("📋 Audit Account Configuration")
         print("The audit account will be designated as delegated administrator")
@@ -488,7 +626,7 @@ class InteractiveMenu:
         # Check Control Tower status
         print(f"\n🏗️ Control Tower Status:")
         try:
-            from ..control_tower.deployer import ControlTowerDeployer
+            from src.control_tower.deployer import ControlTowerDeployer
             
             deployer = ControlTowerDeployer(self.aws_client)
             
@@ -529,7 +667,7 @@ class InteractiveMenu:
         # Check security services status
         print(f"\n🛡️ Security Services Status:")
         try:
-            from ..post_deployment.orchestrator import PostDeploymentOrchestrator
+            from src.post_deployment.orchestrator import PostDeploymentOrchestrator
             
             orchestrator = PostDeploymentOrchestrator(self.config, self.aws_client)
             status = orchestrator.get_deployment_status()
@@ -558,7 +696,7 @@ class InteractiveMenu:
         
         if operation_id:
             try:
-                from ..control_tower.orchestrator import DeploymentOrchestrator
+                from src.control_tower.orchestrator import DeploymentOrchestrator
                 
                 orchestrator = DeploymentOrchestrator(self.config, self.aws_client)
                 status_info = orchestrator.get_deployment_status(operation_id)
@@ -589,16 +727,272 @@ class InteractiveMenu:
         input("\nPress Enter to continue...")
 
     def _generate_documentation(self) -> None:
-        """Generate documentation (placeholder)."""
+        """Generate comprehensive documentation and diagrams."""
         print("\n" + "=" * 60)
         print("Generate Documentation")
         print("=" * 60)
-        print("🚧 This feature will be implemented in Milestone 5.")
-        print(
-            "   Will generate deployment summaries and architecture diagrams."
-        )
-
+        
+        from src.documentation.generator import DocumentationGenerator
+        from src.documentation.diagrams import DiagramGenerator
+        from pathlib import Path
+        from datetime import datetime
+        
+        try:
+            # Initialize generators
+            doc_generator = DocumentationGenerator(self.config, self.aws_client)
+            diagram_generator = DiagramGenerator(self.config, self.aws_client)
+            
+            # Create output directory
+            docs_dir = Path("docs")
+            docs_dir.mkdir(exist_ok=True)
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            print("📄 Generating documentation...")
+            
+            # 1. Generate deployment summary
+            print("  • Deployment summary...")
+            try:
+                from src.control_tower.orchestrator import DeploymentOrchestrator
+                orchestrator = DeploymentOrchestrator(self.config, self.aws_client)
+                deployment_state = {
+                    'audit_account_id': orchestrator.get_audit_account_id(),
+                    'landing_zone_arn': orchestrator.get_stored_landing_zone_arn(),
+                    'config': self.config.to_dict()
+                }
+                
+                summary = doc_generator.generate_deployment_summary(deployment_state)
+                summary_file = doc_generator.save_documentation(
+                    summary, f"deployment_summary_{timestamp}.md", docs_dir
+                )
+                print(f"    ✅ Saved: {summary_file}")
+                
+            except Exception as e:
+                print(f"    ⚠️ Could not generate deployment summary: {e}")
+            
+            # 2. Generate configuration documentation
+            print("  • Configuration reference...")
+            try:
+                config_docs = doc_generator.generate_configuration_docs()
+                config_file = doc_generator.save_documentation(
+                    config_docs, f"configuration_reference_{timestamp}.md", docs_dir
+                )
+                print(f"    ✅ Saved: {config_file}")
+                
+            except Exception as e:
+                print(f"    ⚠️ Could not generate configuration docs: {e}")
+            
+            # 3. Generate validation report
+            print("  • Validation report...")
+            try:
+                from src.post_deployment.orchestrator import PostDeploymentOrchestrator
+                post_orchestrator = PostDeploymentOrchestrator(self.config, self.aws_client)
+                validation_results = post_orchestrator.validate_service_health()
+                
+                validation_report = doc_generator.generate_validation_report(validation_results)
+                validation_file = doc_generator.save_documentation(
+                    validation_report, f"validation_report_{timestamp}.md", docs_dir
+                )
+                print(f"    ✅ Saved: {validation_file}")
+                
+            except Exception as e:
+                print(f"    ⚠️ Could not generate validation report: {e}")
+            
+            # 4. Generate architecture diagrams
+            print("🎨 Generating architecture diagrams...")
+            diagrams_dir = docs_dir / "diagrams"
+            diagrams_dir.mkdir(exist_ok=True)
+            
+            try:
+                # Control Tower structure diagram
+                print("  • Control Tower structure...")
+                ct_diagram = diagram_generator.generate_control_tower_diagram()
+                ct_file = diagrams_dir / f"control_tower_structure_{timestamp}.png"
+                diagram_generator.save_diagram(ct_diagram, ct_file)
+                print(f"    ✅ Saved: {ct_file}")
+                
+                # OU hierarchy diagram
+                print("  • Organization hierarchy...")
+                ou_diagram = diagram_generator.generate_ou_hierarchy_diagram()
+                ou_file = diagrams_dir / f"ou_hierarchy_{timestamp}.png"
+                diagram_generator.save_diagram(ou_diagram, ou_file)
+                print(f"    ✅ Saved: {ou_file}")
+                
+                # Security services diagram
+                print("  • Security services flow...")
+                security_diagram = diagram_generator.generate_security_services_diagram()
+                security_file = diagrams_dir / f"security_services_{timestamp}.png"
+                diagram_generator.save_diagram(security_diagram, security_file)
+                print(f"    ✅ Saved: {security_file}")
+                
+            except Exception as e:
+                print(f"    ⚠️ Could not generate diagrams: {e}")
+            
+            print(f"\n✅ Documentation generated successfully!")
+            print(f"📁 Output directory: {docs_dir.absolute()}")
+            print(f"🎨 Diagrams directory: {diagrams_dir.absolute()}")
+            
+        except Exception as e:
+            print(f"\n❌ Documentation generation failed: {e}")
+        
         input("\nPress Enter to continue...")
+
+    def _security_configuration_management(self) -> None:
+        """Security configuration management menu."""
+        print("\n" + "=" * 60)
+        print("Security Configuration Management")
+        print("=" * 60)
+        print("Manage security policies independently from deployment templates.")
+        print()
+        
+        try:
+            from src.core.security_config import SecurityConfig
+            security_config = SecurityConfig()
+            
+            while True:
+                print("\nSecurity Configuration Options:")
+                print("1. Show Current Security Configuration")
+                print("2. Set Global Security Tier")
+                print("3. Set OU-Specific Security Tier")
+                print("4. Add Account Exception")
+                print("5. Validate Security Configuration")
+                print("0. Return to Main Menu")
+                print("-" * 40)
+                
+                choice = input("Please select an option (0-5): ").strip()
+                
+                if choice == "0":
+                    break
+                elif choice == "1":
+                    self._show_security_config(security_config)
+                elif choice == "2":
+                    self._set_global_security_tier(security_config)
+                elif choice == "3":
+                    self._set_ou_security_tier(security_config)
+                elif choice == "4":
+                    self._add_account_exception(security_config)
+                elif choice == "5":
+                    self._validate_security_config(security_config)
+                else:
+                    print("❌ Invalid choice.")
+                
+                if choice != "0":
+                    input("\nPress Enter to continue...")
+                    
+        except Exception as e:
+            print(f"❌ Error loading security configuration: {e}")
+            input("\nPress Enter to continue...")
+
+    def _show_security_config(self, security_config) -> None:
+        """Display current security configuration."""
+        print("\n📋 Current Security Configuration:")
+        print("-" * 40)
+        
+        tier = security_config.get_security_tier()
+        tier_info = security_config.SECURITY_TIERS[tier]
+        
+        print(f"Global Security Tier: {tier.upper()}")
+        print(f"Description: {tier_info['description']}")
+        print(f"Policies: {', '.join(tier_info['policies'])}")
+        
+        # Show OU overrides
+        config_data = security_config.to_dict()
+        ou_overrides = config_data.get('ou_overrides', {})
+        if ou_overrides:
+            print(f"\nOU-Specific Overrides:")
+            for ou_name, override_tier in ou_overrides.items():
+                print(f"  {ou_name}: {override_tier}")
+        
+        # Show account exceptions
+        exceptions = config_data.get('account_exceptions', [])
+        if exceptions:
+            print(f"\nAccount Exceptions:")
+            for exception in exceptions:
+                print(f"  {exception['account_id']}: {exception['reason']}")
+
+    def _set_global_security_tier(self, security_config) -> None:
+        """Set global security tier."""
+        print("\n🔧 Set Global Security Tier")
+        print("-" * 30)
+        
+        # Show available tiers
+        for tier_name, tier_info in security_config.SECURITY_TIERS.items():
+            print(f"{tier_name.upper()}: {tier_info['description']}")
+        
+        print()
+        tier = input("Enter security tier (basic/standard/strict): ").strip().lower()
+        
+        if tier in security_config.SECURITY_TIERS:
+            try:
+                security_config.set_security_tier(tier)
+                security_config.save_config()
+                print(f"✅ Global security tier set to: {tier}")
+            except Exception as e:
+                print(f"❌ Error: {e}")
+        else:
+            print("❌ Invalid security tier.")
+
+    def _set_ou_security_tier(self, security_config) -> None:
+        """Set OU-specific security tier."""
+        print("\n🏢 Set OU-Specific Security Tier")
+        print("-" * 35)
+        
+        ou_name = input("Enter OU name: ").strip()
+        if not ou_name:
+            print("❌ OU name cannot be empty.")
+            return
+        
+        # Show available tiers
+        for tier_name, tier_info in security_config.SECURITY_TIERS.items():
+            print(f"{tier_name.upper()}: {tier_info['description']}")
+        
+        print()
+        tier = input("Enter security tier (basic/standard/strict): ").strip().lower()
+        
+        if tier in security_config.SECURITY_TIERS:
+            try:
+                security_config.set_ou_override(ou_name, tier)
+                security_config.save_config()
+                print(f"✅ OU override set: {ou_name} -> {tier}")
+            except Exception as e:
+                print(f"❌ Error: {e}")
+        else:
+            print("❌ Invalid security tier.")
+
+    def _add_account_exception(self, security_config) -> None:
+        """Add account exception from security policies."""
+        print("\n⚠️ Add Account Exception")
+        print("-" * 25)
+        
+        account_id = input("Enter AWS Account ID (12 digits): ").strip()
+        if not account_id.isdigit() or len(account_id) != 12:
+            print("❌ Invalid account ID. Must be exactly 12 digits.")
+            return
+        
+        reason = input("Enter reason for exception: ").strip()
+        if not reason:
+            print("❌ Reason cannot be empty.")
+            return
+        
+        try:
+            security_config.add_account_exception(account_id, reason)
+            security_config.save_config()
+            print(f"✅ Account exception added: {account_id}")
+        except Exception as e:
+            print(f"❌ Error: {e}")
+
+    def _validate_security_config(self, security_config) -> None:
+        """Validate security configuration."""
+        print("\n🔍 Validating Security Configuration...")
+        
+        errors = security_config.validate_configuration()
+        
+        if not errors:
+            print("✅ Security configuration is valid.")
+        else:
+            print("❌ Security configuration has errors:")
+            for error in errors:
+                print(f"  - {error}")
 
     def _configuration_management(self) -> None:
         """Configuration management menu."""

@@ -9,8 +9,8 @@ from pathlib import Path
 from datetime import datetime, timezone
 import logging
 
-from ..core.config import Configuration
-from ..core.aws_client import AWSClientManager
+from src.core.config import Configuration
+from src.core.aws_client import AWSClientManager
 
 
 logger = logging.getLogger(__name__)

@@ -8,9 +8,9 @@ are missing.
 from typing import Dict, List, Any, Optional
 from botocore.exceptions import ClientError
 
-from ...core.aws_client import AWSClientManager
-from ...core.validator import BaseValidator, ValidationResult, ValidationStatus
-from ..accounts import AccountManager
+from src.core.aws_client import AWSClientManager
+from src.core.validator import BaseValidator, ValidationResult, ValidationStatus
+from src.prerequisites.accounts import AccountManager
 
 
 class AccountStructureValidator(BaseValidator):

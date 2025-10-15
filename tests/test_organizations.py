@@ -233,3 +233,74 @@ class TestOrganizationsManager:
         assert "all features enabled" in result['issues'][0]
         assert "Security OU not found" in result['issues']
         assert "Sandbox OU not found" in result['issues']
+    
+    def test_create_organization_success(self):
+        """Test successful organization creation."""
+        expected_org = {
+            'Id': 'o-example123456',
+            'MasterAccountId': '123456789012',
+            'FeatureSet': 'ALL'
+        }
+        self.mock_org_client.create_organization.return_value = {
+            'Organization': expected_org
+        }
+        
+        result = self.manager.create_organization()
+        
+        assert result == expected_org
+        self.mock_org_client.create_organization.assert_called_once_with(FeatureSet='ALL')
+    
+    def test_create_organization_already_exists(self):
+        """Test create_organization when organization already exists."""
+        # Mock create_organization to raise AlreadyInOrganizationException
+        self.mock_org_client.create_organization.side_effect = ClientError(
+            error_response={'Error': {'Code': 'AlreadyInOrganizationException'}},
+            operation_name='CreateOrganization'
+        )
+        
+        # Mock get_organization_info to return existing org
+        expected_org = {
+            'Id': 'o-existing123456',
+            'MasterAccountId': '123456789012',
+            'FeatureSet': 'ALL'
+        }
+        self.mock_org_client.describe_organization.return_value = {
+            'Organization': expected_org
+        }
+        
+        result = self.manager.create_organization()
+        
+        assert result == expected_org
+    
+    def test_create_organization_access_denied(self):
+        """Test create_organization with access denied for dependency."""
+        self.mock_org_client.create_organization.side_effect = ClientError(
+            error_response={'Error': {'Code': 'AccessDeniedForDependencyException'}},
+            operation_name='CreateOrganization'
+        )
+        
+        with pytest.raises(OrganizationsError) as exc_info:
+            self.manager.create_organization()
+        
+        assert "iam:CreateServiceLinkedRole" in str(exc_info.value)
+    
+    def test_organization_exists_true(self):
+        """Test organization_exists when organization exists."""
+        self.mock_org_client.describe_organization.return_value = {
+            'Organization': {'Id': 'o-example123456'}
+        }
+        
+        result = self.manager.organization_exists()
+        
+        assert result is True
+    
+    def test_organization_exists_false(self):
+        """Test organization_exists when organization doesn't exist."""
+        self.mock_org_client.describe_organization.side_effect = ClientError(
+            error_response={'Error': {'Code': 'AWSOrganizationsNotInUseException'}},
+            operation_name='DescribeOrganization'
+        )
+        
+        result = self.manager.organization_exists()
+        
+        assert result is False

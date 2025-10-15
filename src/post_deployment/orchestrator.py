@@ -8,11 +8,11 @@ from typing import Dict, List, Optional, Any
 import logging
 import time
 
-from ..core.aws_client import AWSClientManager
-from ..core.config import Configuration
-from .aws_config import ConfigOrganizationManager
-from .guardduty import GuardDutyOrganizationManager
-from .security_hub import SecurityHubOrganizationManager
+from src.core.aws_client import AWSClientManager
+from src.core.config import Configuration
+from src.post_deployment.aws_config import ConfigOrganizationManager
+from src.post_deployment.guardduty import GuardDutyOrganizationManager
+from src.post_deployment.security_hub import SecurityHubOrganizationManager
 
 
 logger = logging.getLogger(__name__)

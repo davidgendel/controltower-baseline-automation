@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 import sys
 
-from src.documentation.diagrams import DiagramGenerator, DiagramGenerationError
+from src.documentation.diagrams import DiagramGenerator, DiagramError
 from src.core.config import Configuration
 from src.core.aws_client import AWSClientManager
 
@@ -65,7 +65,7 @@ class TestDiagramGenerator:
         """Test Control Tower architecture generation with import error."""
         # Ensure diagrams is not in sys.modules
         with patch.dict('sys.modules', {}, clear=True):
-            with pytest.raises(DiagramGenerationError, match="diagrams package not installed"):
+            with pytest.raises(DiagramError, match="diagrams package not installed"):
                 diagram_generator.generate_control_tower_architecture()
     
     def test_generate_control_tower_architecture_error(self, diagram_generator):
@@ -80,7 +80,7 @@ class TestDiagramGenerator:
             'diagrams.aws.security': MagicMock(),
             'diagrams.aws.storage': MagicMock()
         }):
-            with pytest.raises(DiagramGenerationError, match="Failed to generate Control Tower architecture"):
+            with pytest.raises(DiagramError, match="Failed to generate Control Tower architecture"):
                 diagram_generator.generate_control_tower_architecture()
     
     def test_generate_security_topology_success(self, diagram_generator):
@@ -109,7 +109,7 @@ class TestDiagramGenerator:
     def test_generate_security_topology_import_error(self, diagram_generator):
         """Test security topology generation with import error."""
         with patch.dict('sys.modules', {}, clear=True):
-            with pytest.raises(DiagramGenerationError, match="diagrams package not installed"):
+            with pytest.raises(DiagramError, match="diagrams package not installed"):
                 diagram_generator.generate_security_topology()
     
     def test_generate_organization_structure_success(self, diagram_generator):
@@ -146,7 +146,7 @@ class TestDiagramGenerator:
             'diagrams.aws.management': MagicMock(),
             'diagrams.aws.general': MagicMock()
         }):
-            with pytest.raises(DiagramGenerationError, match="Failed to generate organization structure"):
+            with pytest.raises(DiagramError, match="Failed to generate organization structure"):
                 diagram_generator.generate_organization_structure()
     
     def test_generate_all_diagrams_success(self, diagram_generator):
@@ -173,7 +173,7 @@ class TestDiagramGenerator:
     def test_generate_all_diagrams_error(self, diagram_generator):
         """Test generation of all diagrams with error."""
         with patch.object(diagram_generator, 'generate_control_tower_architecture', side_effect=Exception("CT error")):
-            with pytest.raises(DiagramGenerationError, match="Failed to generate all diagrams"):
+            with pytest.raises(DiagramError, match="Failed to generate all diagrams"):
                 diagram_generator.generate_all_diagrams()
     
     def test_default_output_directory(self, diagram_generator):
