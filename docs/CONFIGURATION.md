@@ -1,444 +1,364 @@
 # Configuration Reference
 
-This document provides comprehensive reference for all configuration parameters supported by the AWS Control Tower Automation tool.
+This document provides practical configuration guidance for AWS Control Tower automation. For quick setup, see the [Quick Start Guide](../QUICKSTART.md).
 
 ## Configuration File Format
 
-The tool uses YAML format for configuration files. The default configuration file is `config/settings.yaml`.
+The tool uses YAML format. The default configuration file is `config/settings.yaml`.
 
-## Complete Configuration Example
+## Working Configuration Example
+
+Based on the actual implementation:
 
 ```yaml
-# AWS Configuration
+# AWS Configuration - Core settings
 aws:
   home_region: "us-east-1"
-  governed_regions: 
+  governed_regions:
     - "us-east-1"
     - "us-west-2"
-  profile: "default"  # Optional: AWS CLI profile name
-
-# Account Configuration
-accounts:
-  log_archive_name: "Log Archive"
-  audit_name: "Audit"
-  create_accounts: true  # Whether to create accounts if they don't exist
+  profile_name: null  # Optional: AWS CLI profile name
+  region_deny_enabled: false  # Optional: restrict to governed regions only
 
 # Organization Configuration
 organization:
   security_ou_name: "Security"
-  sandbox_ou_name: "Sandbox"
-  create_ous: true  # Whether to create OUs if they don't exist
+  additional_ous:
+    - name: "Sandbox"
+      parent: "Root"
 
-# Service Control Policy Configuration
+# Account Configuration - Required for Control Tower
+accounts:
+  log_archive:
+    name: "Log Archive"
+    email: "aws-log-archive@yourcompany.com"  # Must be unique
+  audit:
+    name: "Audit"
+    email: "aws-audit@yourcompany.com"        # Must be unique
+
+# Security Policy Tier
 scp_tier: "standard"  # Options: basic, standard, strict
 
-# Control Tower Configuration
-control_tower:
-  landing_zone_version: "3.3"  # Optional: specific version
-  kms_key_arn: null  # Optional: custom KMS key
-  access_logging:
-    enabled: true
-    bucket_name: null  # Optional: custom S3 bucket
+# Identity Center (Optional)
+identity_center:
+  enabled: true
 
-# Post-Deployment Security Configuration
+# Logging Configuration (Optional)
+logging:
+  cloudtrail_enabled: true
+  config_enabled: true
+
+# Post-Deployment Security Services
 post_deployment:
-  # AWS Config Configuration
-  config:
-    enabled: true
-    delivery_channel_name: "default"
-    configuration_recorder_name: "default"
-    
-  # GuardDuty Configuration
   guardduty:
     enabled: true
-    finding_publishing_frequency: "SIX_HOURS"  # Options: FIFTEEN_MINUTES, ONE_HOUR, SIX_HOURS
+    finding_publishing_frequency: "SIX_HOURS"
     delegated_admin_account: "audit"
-    enable_s3_protection: true
-    enable_kubernetes_protection: true
-    enable_malware_protection: true
-    
-  # Security Hub Configuration
+    s3_protection: true
+    kubernetes_protection: true
+    malware_protection: true
+  
   security_hub:
     enabled: true
     delegated_admin_account: "audit"
+    auto_enable_new_accounts: true
     enable_default_standards: true
-    auto_enable_controls: true
+  
+  aws_config:
+    enabled: true
+    organization_aggregator: true
+    compliance_monitoring: true
+```
 
-# Documentation Configuration
-documentation:
-  enabled: true
-  output_directory: "docs"
-  generate_diagrams: true
-  diagram_format: "png"  # Options: png, svg, pdf
+## Security Configuration Management
 
-# Validation Configuration
-validation:
-  enabled: true
-  comprehensive: true
-  generate_reports: true
-  fail_on_warnings: false
+The tool provides independent security policy management through a three-tier system, managed separately from the main deployment configuration.
+
+### Security Tiers
+
+#### Basic Tier
+- **Use Case**: Development environments, testing, sandbox accounts
+- **Restrictions**: Minimal - allows operational flexibility
+- **Policies Applied**:
+  - `deny_root_access`: Prevents root user access
+  - `require_mfa`: Requires multi-factor authentication
+
+#### Standard Tier (Recommended)
+- **Use Case**: Production workloads, most organizations
+- **Restrictions**: Balanced security without operational burden
+- **Policies Applied**:
+  - All Basic tier policies, plus:
+  - `restrict_regions`: Limits access to governed regions only
+  - `deny_leave_org`: Prevents accounts from leaving the organization
+
+#### Strict Tier
+- **Use Case**: Regulated industries (finance, healthcare), high-security environments
+- **Restrictions**: Maximum security controls
+- **Policies Applied**:
+  - All Standard tier policies, plus:
+  - `restrict_instance_types`: Limits EC2 instance types to approved list
+  - `require_encryption`: Enforces encryption for storage and databases
+
+### Security Configuration Structure
+
+The security configuration is stored separately in `config/security-config.yaml`:
+
+```yaml
+security_tier: "standard"        # Global tier: basic, standard, strict
+custom_policies: {}             # Custom policy definitions (advanced)
+ou_overrides: {}               # OU-specific tier overrides
+account_exceptions: []         # Account-level policy exceptions
+```
+
+### Management Interface
+
+Security configuration is managed through the interactive menu:
+
+1. Run the tool: `python src/controltower-baseline.py`
+2. Select option **5: Security Configuration Management**
+3. Choose from available options:
+   - View current security tier and policies
+   - Change global security tier
+   - Set OU-specific overrides
+   - Add account-level exceptions
+   - List all available security tiers
+
+### Common Security Scenarios
+
+#### Scenario 1: Mixed Environment Security
+```yaml
+# Global standard security
+security_tier: "standard"
+
+# Development OU gets relaxed security
+ou_overrides:
+  "Development": "basic"
+
+# Production OU gets strict security  
+ou_overrides:
+  "Production": "strict"
+```
+
+#### Scenario 2: Account Exceptions
+```yaml
+# Strict security organization-wide
+security_tier: "strict"
+
+# Specific accounts need exceptions
+account_exceptions:
+  - account_id: "123456789012"
+    policy: "restrict_instance_types"
+    reason: "ML workloads need GPU instances"
+```
+
+#### Scenario 3: Compliance Environment
+```yaml
+# Maximum security for compliance
+security_tier: "strict"
+
+# No overrides or exceptions
+ou_overrides: {}
+account_exceptions: []
 ```
 
 ## Configuration Sections
 
 ### AWS Configuration (`aws`)
 
-#### `home_region` (Required)
-- **Type**: String
-- **Description**: Primary AWS region for Control Tower deployment
-- **Example**: `"us-east-1"`
-- **Constraints**: Must be a valid AWS region where Control Tower is available
+#### Required Fields
+- **`home_region`**: Primary AWS region for Control Tower deployment
+  - Must be a region where Control Tower is available
+  - Cannot be changed after deployment
+  - Example: `"us-east-1"`
 
-#### `governed_regions` (Required)
-- **Type**: List of strings
-- **Description**: List of AWS regions to be governed by Control Tower
-- **Example**: `["us-east-1", "us-west-2"]`
-- **Constraints**: 
+- **`governed_regions`**: List of regions under Control Tower governance
   - Must include the home region
-  - Maximum 10 regions
-  - All regions must support Control Tower
+  - Maximum 10 regions supported
+  - Example: `["us-east-1", "us-west-2"]`
 
-#### `profile` (Optional)
-- **Type**: String
-- **Description**: AWS CLI profile name for authentication
-- **Default**: `"default"`
-- **Example**: `"production"`
+#### Optional Fields
+- **`profile_name`**: AWS CLI profile for authentication
+  - Default: `null` (uses default credential chain)
+  - Example: `"production"`
+
+- **`region_deny_enabled`**: Restrict access to non-governed regions
+  - Default: `false`
+  - Set to `true` for compliance environments
+  - Creates SCP to deny access to other regions
 
 ### Account Configuration (`accounts`)
 
-#### `log_archive_name` (Required)
-- **Type**: String
-- **Description**: Name for the Log Archive account
-- **Example**: `"Log Archive"`
-- **Constraints**: Must be unique within the organization
+**Required**: Both accounts must be specified with unique email addresses.
 
-#### `audit_name` (Required)
-- **Type**: String
-- **Description**: Name for the Audit account
-- **Example**: `"Audit"`
-- **Constraints**: Must be unique within the organization
+```yaml
+accounts:
+  log_archive:
+    name: "Log Archive"                    # Account display name
+    email: "unique-email@yourcompany.com"  # Must be globally unique
+  audit:
+    name: "Audit"                          # Account display name  
+    email: "another-email@yourcompany.com" # Must be globally unique
+```
 
-#### `create_accounts` (Optional)
-- **Type**: Boolean
-- **Description**: Whether to create accounts if they don't exist
-- **Default**: `true`
-- **Example**: `false`
+**Email Requirements**:
+- Each AWS account requires a unique email address
+- Use email aliases if needed: `user+logarchive@domain.com`
+- Cannot reuse emails from existing AWS accounts
 
 ### Organization Configuration (`organization`)
 
-#### `security_ou_name` (Required)
-- **Type**: String
-- **Description**: Name for the Security organizational unit
-- **Example**: `"Security"`
-- **Constraints**: Must be unique within the organization
+#### Required Fields
+- **`security_ou_name`**: Name for the Security organizational unit
+  - Contains the Log Archive and Audit accounts
+  - Example: `"Security"`
 
-#### `sandbox_ou_name` (Required)
-- **Type**: String
-- **Description**: Name for the Sandbox organizational unit
-- **Example**: `"Sandbox"`
-- **Constraints**: Must be unique within the organization
+#### Optional Fields
+- **`additional_ous`**: Extra organizational units to create
+  ```yaml
+  additional_ous:
+    - name: "Production"
+      parent: "Root"
+    - name: "Development"
+      parent: "Root"
+  ```
 
-#### `create_ous` (Optional)
-- **Type**: Boolean
-- **Description**: Whether to create OUs if they don't exist
-- **Default**: `true`
-- **Example**: `false`
+### Security Policy Tier (`scp_tier`)
 
-### SCP Tier Configuration (`scp_tier`)
+Controls the level of security restrictions applied organization-wide:
 
-#### SCP Tier Options
-- **Type**: String (Enum)
-- **Description**: Service Control Policy tier for security restrictions
-- **Options**:
-  - `"basic"`: Minimal restrictions for development
-  - `"standard"`: Balanced security for production (recommended)
-  - `"strict"`: Maximum security for regulated environments
-- **Default**: `"standard"`
+- **`"basic"`**: Minimal restrictions for development
+  - Allows most AWS services and actions
+  - Suitable for sandbox environments
+  
+- **`"standard"`**: Balanced security for production (recommended)
+  - Prevents common security misconfigurations
+  - Maintains operational flexibility
+  
+- **`"strict"`**: Maximum security for regulated environments
+  - Comprehensive restrictions and compliance controls
+  - Suitable for financial services, healthcare
 
-### Control Tower Configuration (`control_tower`)
+### Post-Deployment Security (`post_deployment`)
 
-#### `landing_zone_version` (Optional)
-- **Type**: String
-- **Description**: Specific Control Tower landing zone version
-- **Default**: Latest available version
-- **Example**: `"3.3"`
+#### GuardDuty Configuration
+```yaml
+guardduty:
+  enabled: true                              # Enable GuardDuty organization-wide
+  finding_publishing_frequency: "SIX_HOURS"  # Options: FIFTEEN_MINUTES, ONE_HOUR, SIX_HOURS
+  delegated_admin_account: "audit"           # Which account manages GuardDuty
+  s3_protection: true                        # Monitor S3 buckets
+  kubernetes_protection: true                # Monitor EKS clusters
+  malware_protection: true                   # Scan EC2 instances
+```
 
-#### `kms_key_arn` (Optional)
-- **Type**: String or null
-- **Description**: Custom KMS key ARN for encryption
-- **Default**: `null` (uses AWS managed keys)
-- **Example**: `"arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"`
+#### Security Hub Configuration
+```yaml
+security_hub:
+  enabled: true                        # Enable Security Hub organization-wide
+  delegated_admin_account: "audit"     # Which account manages Security Hub
+  auto_enable_new_accounts: true       # Automatically enable for new accounts
+  enable_default_standards: true       # Enable AWS security standards
+```
 
-#### `access_logging` (Optional)
-- **Type**: Object
-- **Description**: Access logging configuration
-- **Properties**:
-  - `enabled` (Boolean): Enable access logging
-  - `bucket_name` (String or null): Custom S3 bucket name
-
-### Post-Deployment Configuration (`post_deployment`)
-
-#### Config Configuration (`config`)
-
-##### `enabled` (Optional)
-- **Type**: Boolean
-- **Description**: Enable AWS Config organization setup
-- **Default**: `true`
-
-##### `delivery_channel_name` (Optional)
-- **Type**: String
-- **Description**: Config delivery channel name
-- **Default**: `"default"`
-
-##### `configuration_recorder_name` (Optional)
-- **Type**: String
-- **Description**: Config recorder name
-- **Default**: `"default"`
-
-#### GuardDuty Configuration (`guardduty`)
-
-##### `enabled` (Optional)
-- **Type**: Boolean
-- **Description**: Enable GuardDuty organization setup
-- **Default**: `true`
-
-##### `finding_publishing_frequency` (Optional)
-- **Type**: String (Enum)
-- **Description**: How often GuardDuty publishes findings
-- **Options**: `"FIFTEEN_MINUTES"`, `"ONE_HOUR"`, `"SIX_HOURS"`
-- **Default**: `"SIX_HOURS"`
-
-##### `delegated_admin_account` (Required if enabled)
-- **Type**: String
-- **Description**: Account to use as GuardDuty delegated administrator
-- **Example**: `"audit"`
-- **Constraints**: Must be "audit" or "log_archive"
-
-##### `enable_s3_protection` (Optional)
-- **Type**: Boolean
-- **Description**: Enable S3 protection in GuardDuty
-- **Default**: `true`
-
-##### `enable_kubernetes_protection` (Optional)
-- **Type**: Boolean
-- **Description**: Enable Kubernetes protection in GuardDuty
-- **Default**: `true`
-
-##### `enable_malware_protection` (Optional)
-- **Type**: Boolean
-- **Description**: Enable malware protection in GuardDuty
-- **Default**: `true`
-
-#### Security Hub Configuration (`security_hub`)
-
-##### `enabled` (Optional)
-- **Type**: Boolean
-- **Description**: Enable Security Hub organization setup
-- **Default**: `true`
-
-##### `delegated_admin_account` (Required if enabled)
-- **Type**: String
-- **Description**: Account to use as Security Hub delegated administrator
-- **Example**: `"audit"`
-- **Constraints**: Must be "audit" or "log_archive"
-
-##### `enable_default_standards` (Optional)
-- **Type**: Boolean
-- **Description**: Enable default security standards
-- **Default**: `true`
-
-##### `auto_enable_controls` (Optional)
-- **Type**: Boolean
-- **Description**: Automatically enable new controls
-- **Default**: `true`
-
-### Documentation Configuration (`documentation`)
-
-#### `enabled` (Optional)
-- **Type**: Boolean
-- **Description**: Enable documentation generation
-- **Default**: `true`
-
-#### `output_directory` (Optional)
-- **Type**: String
-- **Description**: Directory for generated documentation
-- **Default**: `"docs"`
-
-#### `generate_diagrams` (Optional)
-- **Type**: Boolean
-- **Description**: Generate architecture diagrams
-- **Default**: `true`
-
-#### `diagram_format` (Optional)
-- **Type**: String (Enum)
-- **Description**: Format for generated diagrams
-- **Options**: `"png"`, `"svg"`, `"pdf"`
-- **Default**: `"png"`
-
-### Validation Configuration (`validation`)
-
-#### `enabled` (Optional)
-- **Type**: Boolean
-- **Description**: Enable deployment validation
-- **Default**: `true`
-
-#### `comprehensive` (Optional)
-- **Type**: Boolean
-- **Description**: Perform comprehensive validation checks
-- **Default**: `true`
-
-#### `generate_reports` (Optional)
-- **Type**: Boolean
-- **Description**: Generate validation reports
-- **Default**: `true`
-
-#### `fail_on_warnings` (Optional)
-- **Type**: Boolean
-- **Description**: Treat warnings as failures
-- **Default**: `false`
+#### AWS Config Configuration
+```yaml
+aws_config:
+  enabled: true                    # Enable Config organization-wide
+  organization_aggregator: true    # Create organization-wide aggregator
+  compliance_monitoring: true      # Enable compliance monitoring
+```
 
 ## Environment Variable Overrides
 
-Configuration values can be overridden using environment variables with the prefix `CT_`:
+The tool supports these environment variable overrides:
 
 ```bash
-# Override home region
-export CT_AWS_HOME_REGION="eu-west-1"
+# AWS region override
+export AWS_REGION="eu-west-1"
 
-# Override SCP tier
-export CT_SCP_TIER="strict"
-
-# Override GuardDuty settings
-export CT_POST_DEPLOYMENT_GUARDDUTY_ENABLED="false"
+# AWS profile override  
+export AWS_PROFILE="production"
 ```
 
-### Environment Variable Naming Convention
+**Precedence Order**:
+1. Environment variables (highest)
+2. Configuration file values
+3. Default values (lowest)
 
-Environment variables follow this pattern:
-- Prefix: `CT_`
-- Section and key names in uppercase
-- Nested keys separated by underscores
-- Arrays specified as comma-separated values
+## Configuration Templates
 
-Examples:
-- `aws.home_region` → `CT_AWS_HOME_REGION`
-- `post_deployment.guardduty.enabled` → `CT_POST_DEPLOYMENT_GUARDDUTY_ENABLED`
-- `aws.governed_regions` → `CT_AWS_GOVERNED_REGIONS="us-east-1,us-west-2"`
+### Template Comparison
 
-## Configuration Validation
+| Template | Use Case | Regions | Security | Setup Time |
+|----------|----------|---------|----------|------------|
+| **Minimal** | Small orgs, PoC | 1 region | Basic | 30 min |
+| **Complete** | Medium/Large orgs | 3 regions | Standard | 60 min |
+| **Enterprise** | Large enterprises | 6 regions | Strict | 90 min |
 
-The tool performs comprehensive configuration validation:
+### Template Usage
+```bash
+# Copy desired template
+cp config/config-example-minimal.yaml config.yaml
 
-### Required Fields
-- All required fields must be present
-- Values must match expected types
-- Enum values must be from allowed options
+# Edit with your details
+nano config.yaml
 
-### AWS-Specific Validation
-- Regions must be valid AWS regions
-- Account names must be unique
-- Service availability checked per region
+# Deploy
+python src/controltower-baseline.py
+```
 
-### Cross-Field Validation
-- Home region must be in governed regions list
-- Delegated admin accounts must exist
-- SCP tier must be compatible with organization type
+## Common Configuration Patterns
 
-### Security Validation
-- No sensitive data in configuration files
-- Proper IAM role references
-- Secure default values
-
-## Configuration Examples
-
-### Minimal Configuration
+### Multi-Region Production
 ```yaml
 aws:
   home_region: "us-east-1"
-  governed_regions: ["us-east-1"]
-
-accounts:
-  log_archive_name: "Log Archive"
-  audit_name: "Audit"
-
-organization:
-  security_ou_name: "Security"
-  sandbox_ou_name: "Sandbox"
-
+  governed_regions: ["us-east-1", "us-west-2", "eu-west-1"]
 scp_tier: "standard"
 ```
 
-### Multi-Region Production Configuration
+### Compliance Environment
 ```yaml
 aws:
-  home_region: "us-east-1"
-  governed_regions: 
-    - "us-east-1"
-    - "us-west-2"
-    - "eu-west-1"
-
-accounts:
-  log_archive_name: "Production-LogArchive"
-  audit_name: "Production-Audit"
-
-organization:
-  security_ou_name: "Production-Security"
-  sandbox_ou_name: "Production-Sandbox"
-
+  region_deny_enabled: true
 scp_tier: "strict"
-
 post_deployment:
   guardduty:
     finding_publishing_frequency: "FIFTEEN_MINUTES"
-    enable_s3_protection: true
-    enable_kubernetes_protection: true
-    enable_malware_protection: true
-  
-  security_hub:
-    enable_default_standards: true
-    auto_enable_controls: true
 ```
 
-### Development Environment Configuration
+### Development Environment
 ```yaml
 aws:
-  home_region: "us-west-2"
-  governed_regions: ["us-west-2"]
-
-accounts:
-  log_archive_name: "Dev-LogArchive"
-  audit_name: "Dev-Audit"
-
-organization:
-  security_ou_name: "Dev-Security"
-  sandbox_ou_name: "Dev-Sandbox"
-
-scp_tier: "basic"
-
-post_deployment:
-  guardduty:
-    finding_publishing_frequency: "SIX_HOURS"
-  
-validation:
-  fail_on_warnings: false
+  governed_regions: ["us-east-1"]  # Single region
+scp_tier: "basic"                  # Minimal restrictions
 ```
 
-## Best Practices
+## Validation
 
-### Configuration Management
-1. **Version Control**: Store configuration files in version control
-2. **Environment Separation**: Use separate configs for dev/staging/prod
-3. **Sensitive Data**: Use environment variables for sensitive values
-4. **Validation**: Always validate configuration before deployment
+The tool validates configuration automatically:
 
-### Security Considerations
-1. **Least Privilege**: Use minimal required permissions
-2. **Encryption**: Enable encryption for all supported services
-3. **Monitoring**: Enable comprehensive logging and monitoring
-4. **Regular Reviews**: Periodically review and update configurations
+- **Required fields**: Must be present and non-empty
+- **Email uniqueness**: Checks for duplicate email addresses
+- **Region validity**: Verifies AWS region names
+- **Service availability**: Confirms services are available in selected regions
 
-### Operational Excellence
-1. **Documentation**: Document all configuration changes
-2. **Testing**: Test configuration changes in non-production first
-3. **Backup**: Maintain backup copies of working configurations
-4. **Automation**: Use CI/CD for configuration deployment where possible
+## Troubleshooting Configuration
+
+### Common Issues
+
+**"Invalid configuration format"**
+- Check YAML syntax with `python -c "import yaml; yaml.safe_load(open('config.yaml'))"`
+- Ensure proper indentation (spaces, not tabs)
+
+**"Email already in use"**
+- Each account needs a globally unique email address
+- Use email aliases: `user+audit@domain.com`
+
+**"Region not supported"**
+- Verify region supports Control Tower
+- Check AWS Regional Services List
+
+**"Home region not in governed regions"**
+- The tool automatically adds home region to governed regions
+- No action needed - this is handled automatically

@@ -1,499 +1,262 @@
-# Troubleshooting Guide
+# Troubleshooting Playbook
 
-This guide provides solutions for common issues encountered when using the AWS Control Tower Automation tool.
+This playbook provides quick solutions for common issues. For each problem, we show what it means, how to fix it, and how long it takes.
 
 ## Quick Diagnosis
 
-### Check System Status
+### First Steps When Something Goes Wrong
 ```bash
-# Run validation to check current status
+# 1. Check if it's a configuration issue
 python src/controltower-baseline.py --validate-only
 
-# Check AWS credentials
+# 2. Verify AWS access
 aws sts get-caller-identity
 
-# Verify region availability
-aws controltower get-landing-zone --region us-east-1
+# 3. Check AWS service health
+# Visit: https://status.aws.amazon.com/
 ```
 
-### Common Error Patterns
-- **Permission Errors**: Usually indicate missing IAM permissions
-- **Service Unavailable**: Check AWS service health and region availability
-- **Configuration Errors**: Validate configuration file syntax and values
-- **Network Errors**: Verify internet connectivity and AWS endpoint access
+## Common Issues and Quick Fixes
 
-## Prerequisites Issues
+### "Prerequisites validation failed"
 
-### AWS Organizations Not Enabled
-**Error**: `Organizations service is not available or not enabled`
+**What it means**: Your AWS account isn't ready for Control Tower deployment
 
-**Symptoms**:
-- Cannot access Organizations APIs
-- Error during prerequisites validation
-- "All features not enabled" message
+**Most common causes**:
+- AWS Organizations not enabled with all features
+- Missing required accounts (Log Archive, Audit)
+- Insufficient IAM permissions
 
-**Solutions**:
-1. **Enable AWS Organizations**:
+**Quick fix**:
+1. Run the tool: `python src/controltower-baseline.py`
+2. Select option **2: Setup Prerequisites**
+3. Follow the prompts to fix each issue
+4. Re-run option **1: Validate Prerequisites**
+
+**Time to fix**: 5-10 minutes
+
+---
+
+### "Control Tower deployment failed"
+
+**What it means**: AWS couldn't create the Control Tower landing zone
+
+**Most common causes**:
+- Another Control Tower deployment already exists
+- Service quotas exceeded
+- Region doesn't support Control Tower
+
+**Quick fix**:
+1. **Check for existing Control Tower**:
+   - Go to AWS Console → Control Tower
+   - If one exists, delete it first or use a different account
+
+2. **Verify region support**:
+   - Control Tower isn't available in all regions
+   - Use us-east-1, us-west-2, or eu-west-1 for best support
+
+3. **Check service quotas**:
+   - Go to AWS Console → Service Quotas
+   - Search for "Control Tower" and request increases if needed
+
+**Time to fix**: 15-30 minutes
+
+---
+
+### "Security services not working"
+
+**What it means**: GuardDuty, Security Hub, or Config didn't enable properly
+
+**Most common causes**:
+- Services already enabled in some accounts
+- Delegated administrator conflicts
+- Service quotas exceeded
+
+**Quick fix**:
+1. Run the tool: `python src/controltower-baseline.py`
+2. Select option **4: Post-Deployment Security Setup**
+3. If it fails again, try these steps:
+   - Go to GuardDuty Console → Settings → Disable GuardDuty
+   - Go to Security Hub Console → Settings → Disable Security Hub
+   - Re-run option 4
+
+**Time to fix**: 10-15 minutes
+
+---
+
+### "Email already in use"
+
+**What it means**: The email addresses in your config are already used by other AWS accounts
+
+**Quick fix**:
+1. Edit your `config.yaml` file
+2. Change the email addresses to unique ones:
+   ```yaml
+   accounts:
+     log_archive:
+       email: "your-unique-email+logarchive@company.com"
+     audit:
+       email: "your-unique-email+audit@company.com"
+   ```
+3. Use email aliases (the +suffix trick works with most email providers)
+
+**Time to fix**: 2 minutes
+
+---
+
+### "Configuration file not found"
+
+**What it means**: The tool can't find your configuration file
+
+**Quick fix**:
+1. Make sure you copied a template:
    ```bash
-   aws organizations create-organization --feature-set ALL
+   cp config/config-example-minimal.yaml config.yaml
+   ```
+2. Or specify the config file directly:
+   ```bash
+   python src/controltower-baseline.py config/settings.yaml
    ```
 
-2. **Verify Organization Status**:
+**Time to fix**: 1 minute
+
+---
+
+### "Invalid YAML syntax"
+
+**What it means**: There's a formatting error in your configuration file
+
+**Quick fix**:
+1. Check YAML syntax:
    ```bash
-   aws organizations describe-organization
+   python -c "import yaml; yaml.safe_load(open('config.yaml'))"
+   ```
+2. Common issues:
+   - Mixed tabs and spaces (use spaces only)
+   - Missing quotes around email addresses
+   - Incorrect indentation
+
+3. Copy a fresh template and start over if needed
+
+**Time to fix**: 5 minutes
+
+---
+
+### "AWS credentials not configured"
+
+**What it means**: The tool can't access your AWS account
+
+**Quick fix**:
+1. **Option 1 - AWS CLI**:
+   ```bash
+   aws configure
+   # Enter your Access Key ID, Secret Key, and region
    ```
 
-3. **Check Permissions**:
-   - Ensure account has `AWSOrganizationsFullAccess`
-   - Verify you're in the management account
-
-### Missing IAM Roles
-**Error**: `Required IAM role not found: AWSControlTowerAdmin`
-
-**Symptoms**:
-- Control Tower deployment fails
-- Permission denied errors
-- Role assumption failures
-
-**Solutions**:
-1. **Create Required Roles**:
+2. **Option 2 - Environment variables**:
    ```bash
-   # Run prerequisites setup
-   python src/controltower-baseline.py --setup-prerequisites
+   export AWS_ACCESS_KEY_ID="your-key"
+   export AWS_SECRET_ACCESS_KEY="your-secret"
+   export AWS_REGION="us-east-1"
    ```
 
-2. **Manual Role Creation**:
-   - Navigate to IAM Console
-   - Create roles with Control Tower service trust policy
-   - Attach required policies
+3. **Option 3 - IAM roles** (if running on EC2):
+   - Attach an IAM role with appropriate permissions to your EC2 instance
 
-3. **Verify Role Policies**:
-   ```bash
-   aws iam get-role --role-name AWSControlTowerAdmin
-   aws iam list-attached-role-policies --role-name AWSControlTowerAdmin
-   ```
+**Time to fix**: 3-5 minutes
 
-### Account Creation Issues
-**Error**: `Cannot create account: Email already in use`
+## Interactive Menu Issues
 
-**Symptoms**:
-- Account creation fails
-- Duplicate email address errors
-- Account factory issues
+### "Invalid choice" when selecting menu option 8
 
-**Solutions**:
-1. **Use Unique Email Addresses**:
-   - Each AWS account requires unique email
-   - Use email aliases (e.g., `user+logarchive@domain.com`)
+**What it means**: You're using an older version or the menu validation is broken
 
-2. **Check Existing Accounts**:
-   ```bash
-   aws organizations list-accounts
-   ```
+**Quick fix**: This should be fixed in the current version. If you still see this:
+1. Make sure you're using the latest version
+2. Try selecting option 0 to exit and restart the tool
 
-3. **Use Existing Accounts**:
-   - Update configuration to reference existing accounts
-   - Set `create_accounts: false` in configuration
+---
 
-## Control Tower Deployment Issues
+### Menu appears but options don't work
 
-### Landing Zone Creation Fails
-**Error**: `Landing zone creation failed with status: FAILED`
+**What it means**: There might be a Python import or dependency issue
 
-**Symptoms**:
-- Deployment hangs or fails
-- CloudFormation stack errors
-- Resource creation timeouts
-
-**Solutions**:
-1. **Check Prerequisites**:
-   ```bash
-   # Validate all prerequisites
-   python src/controltower-baseline.py --validate-prerequisites
-   ```
-
-2. **Review CloudFormation Events**:
-   - Navigate to CloudFormation Console
-   - Check Control Tower stack events
-   - Look for specific error messages
-
-3. **Common Fixes**:
-   - Ensure no existing Control Tower deployment
-   - Verify sufficient service quotas
-   - Check for conflicting resources
-
-4. **Retry Deployment**:
-   ```bash
-   # Clean up failed deployment first
-   aws controltower delete-landing-zone --landing-zone-identifier <id>
-   
-   # Wait for cleanup completion, then retry
-   python src/controltower-baseline.py --deploy-control-tower
-   ```
-
-### SCP Attachment Failures
-**Error**: `Failed to attach SCP policy to organizational unit`
-
-**Symptoms**:
-- Policy attachment errors
-- Permission denied for SCP operations
-- Organizational unit not found
-
-**Solutions**:
-1. **Verify OU Structure**:
-   ```bash
-   aws organizations list-organizational-units-for-parent --parent-id <root-id>
-   ```
-
-2. **Check SCP Permissions**:
-   - Ensure `AWSOrganizationsFullAccess` permission
-   - Verify SCP policies are enabled
-
-3. **Manual SCP Management**:
-   - Navigate to Organizations Console
-   - Manually attach policies to OUs
-   - Verify policy syntax and content
-
-### Drift Detection Issues
-**Error**: `Landing zone drift detected`
-
-**Symptoms**:
-- Configuration drift warnings
-- Manual changes detected
-- Compliance violations
-
-**Solutions**:
-1. **Review Drift Details**:
-   ```bash
-   aws controltower get-landing-zone --include-drift
-   ```
-
-2. **Reset to Baseline**:
-   - Use Control Tower Console to reset
-   - Or redeploy with current configuration
-
-3. **Prevent Future Drift**:
-   - Use SCPs to prevent manual changes
-   - Implement change management processes
-
-## Security Services Issues
-
-### AWS Config Setup Failures
-**Error**: `Config organization aggregator setup failed`
-
-**Symptoms**:
-- Config not enabled organization-wide
-- Aggregator creation failures
-- Permission errors
-
-**Solutions**:
-1. **Check Config Service Role**:
-   ```bash
-   aws iam get-role --role-name AWSConfigRole
-   ```
-
-2. **Verify Aggregator Permissions**:
-   - Ensure Config has organization permissions
-   - Check cross-account access
-
-3. **Manual Config Setup**:
-   ```bash
-   # Enable Config in management account
-   aws configservice put-configuration-recorder --configuration-recorder name=default,roleARN=<role-arn>
-   
-   # Create organization aggregator
-   aws configservice put-organization-configuration-aggregator --organization-aggregator-name OrgAggregator
-   ```
-
-### GuardDuty Delegation Issues
-**Error**: `GuardDuty delegated administrator setup failed`
-
-**Symptoms**:
-- Cannot set delegated administrator
-- GuardDuty not enabled organization-wide
-- Member account invitation failures
-
-**Solutions**:
-1. **Verify Account Status**:
-   ```bash
-   aws guardduty list-detectors
-   aws organizations describe-account --account-id <audit-account-id>
-   ```
-
-2. **Enable GuardDuty in Management Account**:
-   ```bash
-   aws guardduty create-detector --enable
-   ```
-
-3. **Set Delegated Administrator**:
-   ```bash
-   aws organizations register-delegated-administrator \
-     --account-id <audit-account-id> \
-     --service-principal guardduty.amazonaws.com
-   ```
-
-4. **Check Service Quotas**:
-   - Verify GuardDuty member account limits
-   - Request quota increases if needed
-
-### Security Hub Configuration Issues
-**Error**: `Security Hub organization setup failed`
-
-**Symptoms**:
-- Security Hub not enabled
-- Standards not activated
-- Finding aggregation failures
-
-**Solutions**:
-1. **Enable Security Hub**:
-   ```bash
-   aws securityhub enable-security-hub
-   ```
-
-2. **Set Organization Configuration**:
-   ```bash
-   aws securityhub create-configuration-policy \
-     --name OrgPolicy \
-     --configuration-policy <policy-json>
-   ```
-
-3. **Enable Standards**:
-   ```bash
-   aws securityhub batch-enable-standards \
-     --standards-subscription-requests StandardsArn=<arn>
-   ```
-
-## Validation and Documentation Issues
-
-### Validation Failures
-**Error**: `Deployment validation failed: Service not responding`
-
-**Symptoms**:
-- Validation checks fail
-- Services appear inactive
-- Status checks timeout
-
-**Solutions**:
-1. **Check Service Health**:
-   ```bash
-   # Check individual services
-   aws controltower get-landing-zone
-   aws guardduty list-detectors
-   aws securityhub describe-hub
-   ```
-
-2. **Wait for Propagation**:
-   - Some services take time to propagate
-   - Wait 10-15 minutes and retry validation
-
-3. **Manual Verification**:
-   - Use AWS Console to verify service status
-   - Check service-specific dashboards
-
-### Documentation Generation Failures
-**Error**: `Documentation generation failed: Template not found`
-
-**Symptoms**:
-- Missing documentation files
-- Template processing errors
-- Diagram generation failures
-
-**Solutions**:
-1. **Check Dependencies**:
+**Quick fix**:
+1. Reinstall dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-
-2. **Verify Output Directory**:
+2. Check Python version:
    ```bash
-   mkdir -p docs
-   chmod 755 docs
+   python --version  # Should be 3.12 or higher
    ```
 
-3. **Manual Documentation**:
-   ```bash
-   # Generate documentation manually
-   python src/controltower-baseline.py --generate-docs-only
-   ```
+## AWS Console Verification
 
-## Network and Connectivity Issues
+### How to Check if Control Tower Worked
+1. **AWS Console → Control Tower**
+   - Should show "Landing zone: Available"
+   - Dashboard should be green with no errors
 
-### AWS API Connectivity
-**Error**: `Unable to connect to AWS services`
+2. **AWS Console → Organizations**
+   - Should show your organizational structure
+   - Accounts should be in the correct OUs
 
-**Symptoms**:
-- Network timeouts
-- SSL/TLS errors
-- DNS resolution failures
+3. **AWS Console → GuardDuty**
+   - Should show "Enabled" status
+   - Should list member accounts
 
-**Solutions**:
-1. **Check Internet Connectivity**:
-   ```bash
-   ping aws.amazon.com
-   nslookup controltower.us-east-1.amazonaws.com
-   ```
+4. **AWS Console → Security Hub**
+   - Should show "Enabled" status
+   - Should show security standards activated
 
-2. **Verify AWS Endpoints**:
-   ```bash
-   curl -I https://controltower.us-east-1.amazonaws.com
-   ```
+### How to Check if Security Services Worked
+1. **GuardDuty**: Go to GuardDuty Console → Summary
+   - Should show "X accounts protected"
+   - Should show recent activity (may take 15-30 minutes)
 
-3. **Configure Proxy Settings**:
-   ```bash
-   export HTTP_PROXY=http://proxy.company.com:8080
-   export HTTPS_PROXY=http://proxy.company.com:8080
-   ```
+2. **Security Hub**: Go to Security Hub Console → Summary
+   - Should show compliance scores
+   - Should show findings from various sources
 
-4. **Use VPC Endpoints**:
-   - Configure VPC endpoints for AWS services
-   - Update route tables and security groups
+3. **Config**: Go to Config Console → Dashboard
+   - Should show configuration items being recorded
+   - Should show compliance status
 
-### Region Availability Issues
-**Error**: `Service not available in region: eu-north-1`
+## When to Contact AWS Support
 
-**Symptoms**:
-- Service unavailable errors
-- Region-specific failures
-- Feature not supported messages
+Contact AWS Support if you encounter:
+- Control Tower deployment fails repeatedly with the same error
+- AWS service quotas that can't be increased through the console
+- Billing or account-level issues
+- Service outages affecting your region
 
-**Solutions**:
-1. **Check Service Availability**:
-   - Consult AWS Regional Services List
-   - Verify Control Tower region support
+## Prevention Tips
 
-2. **Update Configuration**:
-   ```yaml
-   aws:
-     governed_regions: 
-       - "us-east-1"  # Use supported regions only
-       - "us-west-2"
-   ```
-
-3. **Use Alternative Regions**:
-   - Choose regions with full service support
-   - Consider data residency requirements
-
-## Performance Issues
-
-### Slow Deployment Times
-**Symptoms**:
-- Deployment takes longer than expected
-- API calls timing out
-- Progress appears stuck
-
-**Solutions**:
-1. **Check AWS Service Health**:
-   - Visit AWS Service Health Dashboard
-   - Look for service disruptions
-
-2. **Optimize Configuration**:
-   ```yaml
-   # Reduce governed regions for faster deployment
-   aws:
-     governed_regions: ["us-east-1"]  # Start with single region
-   ```
-
-3. **Monitor Progress**:
-   ```bash
-   # Enable debug logging
-   export LOG_LEVEL=DEBUG
-   python src/controltower-baseline.py
-   ```
-
-### Memory or Resource Issues
-**Symptoms**:
-- Out of memory errors
-- Process crashes
-- System resource exhaustion
-
-**Solutions**:
-1. **Increase System Resources**:
-   - Use larger EC2 instance
-   - Increase available memory
-   - Monitor disk space
-
-2. **Optimize Processing**:
-   ```bash
-   # Process in smaller batches
-   export CT_BATCH_SIZE=10
-   ```
-
-## Error Code Reference
-
-### Control Tower Errors (CT-xxx)
-- **CT-001**: Landing zone creation failed
-- **CT-002**: SCP attachment failed
-- **CT-003**: Drift detection error
-- **CT-004**: Account enrollment failed
-
-### Security Baseline Errors (SB-xxx)
-- **SB-001**: Config aggregator setup failed
-- **SB-002**: GuardDuty delegation failed
-- **SB-003**: Security Hub setup failed
-- **SB-004**: Service health check failed
-
-### Configuration Errors (CF-xxx)
-- **CF-001**: Invalid configuration format
-- **CF-002**: Missing required parameter
-- **CF-003**: Invalid parameter value
-- **CF-004**: Configuration validation failed
-
-### Permission Errors (PM-xxx)
-- **PM-001**: Insufficient IAM permissions
-- **PM-002**: Role assumption failed
-- **PM-003**: Cross-account access denied
-- **PM-004**: Service-linked role missing
-
-## Getting Additional Help
-
-### Log Analysis
-1. **Enable Debug Logging**:
-   ```bash
-   export LOG_LEVEL=DEBUG
-   python src/controltower-baseline.py 2>&1 | tee deployment.log
-   ```
-
-2. **Check CloudTrail Logs**:
-   - Review API calls in CloudTrail
-   - Look for error patterns and failed operations
-
-3. **AWS Support**:
-   - Open AWS Support case for service-specific issues
-   - Include relevant log excerpts and error messages
-
-### Community Resources
-- **AWS Documentation**: Latest Control Tower documentation
-- **AWS Forums**: Community discussions and solutions
-- **GitHub Issues**: Report bugs and feature requests
-
-### Professional Support
-- **AWS Professional Services**: For complex deployments
-- **AWS Partners**: Certified implementation partners
-- **Training**: AWS Control Tower workshops and training
-
-## Prevention Strategies
-
-### Pre-Deployment Checklist
-- [ ] Verify AWS Organizations is enabled with all features
-- [ ] Confirm sufficient permissions in management account
-- [ ] Check service quotas and limits
-- [ ] Validate configuration file syntax
-- [ ] Test in non-production environment first
-
-### Monitoring and Alerting
-- [ ] Set up CloudWatch alarms for service health
-- [ ] Configure SNS notifications for failures
-- [ ] Implement regular validation checks
-- [ ] Monitor AWS service health dashboard
-
-### Change Management
-- [ ] Document all configuration changes
-- [ ] Test changes in development environment
-- [ ] Use version control for configuration files
-- [ ] Implement approval process for production changes
+### Before You Start
+- [ ] Verify you're in the management account (not a member account)
+- [ ] Check that your AWS account is in good standing (no billing issues)
+- [ ] Ensure you have admin-level permissions
+- [ ] Test in a non-production account first
 
 ### Regular Maintenance
-- [ ] Review and update SCP policies
-- [ ] Monitor compliance status
-- [ ] Update tool to latest version
-- [ ] Review and rotate access credentials
+- [ ] Monitor AWS service health dashboard
+- [ ] Keep the tool updated to the latest version
+- [ ] Review and update email addresses if they change
+- [ ] Backup your working configuration files
+
+## Getting More Help
+
+### Documentation
+- [Quick Start Guide](../QUICKSTART.md) - Basic setup
+- [Configuration Guide](CONFIGURATION.md) - Detailed configuration
+- [Operations Guide](OPERATIONS.md) - Day-2 operations
+
+### AWS Resources
+- [AWS Control Tower User Guide](https://docs.aws.amazon.com/controltower/)
+- [AWS Service Health Dashboard](https://status.aws.amazon.com/)
+- [AWS Support Center](https://console.aws.amazon.com/support/)
+
+### Community
+- AWS re:Post forums for Control Tower questions
+- AWS documentation feedback for service-specific issues

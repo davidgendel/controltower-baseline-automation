@@ -36,7 +36,7 @@ Examples:
   %(prog)s --validate-only          # Only validate prerequisites
   %(prog)s --version                # Show version information
 
-For more information, visit: https://github.com/aws-control-tower-automation
+For more information, see the project documentation.
         """,
     )
 

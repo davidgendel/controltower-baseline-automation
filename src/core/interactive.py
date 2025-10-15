@@ -65,12 +65,12 @@ class InteractiveMenu:
         """
         while True:
             try:
-                choice = input("Please select an option (0-7): ").strip()
-                if choice in ["0", "1", "2", "3", "4", "5", "6", "7"]:
+                choice = input("Please select an option (0-8): ").strip()
+                if choice in ["0", "1", "2", "3", "4", "5", "6", "7", "8"]:
                     return choice
                 else:
                     print(
-                        "❌ Invalid choice. Please select a number from 0-7."
+                        "❌ Invalid choice. Please select a number from 0-8."
                     )
             except (EOFError, KeyboardInterrupt):
                 print("\n👋 Goodbye!")
